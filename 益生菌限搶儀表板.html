@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>益生菌限搶銷售分析儀表板</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0f1117;
+  --bg2: #181c27;
+  --bg3: #1e2335;
+  --border: #2a3050;
+  --accent: #4f8ef7;
+  --accent2: #34c98a;
+  --accent3: #f7a84f;
+  --red: #f26b6b;
+  --text: #e8eaf2;
+  --text2: #8b92b0;
+  --text3: #525a75;
+  --radius: 12px;
+  --font: 'Noto Sans TC', sans-serif;
+  --mono: 'DM Mono', monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: var(--font); font-size: 14px; min-height: 100vh; }
+
+.header { padding: 28px 32px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+.header-left h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.3px; }
+.header-left p { font-size: 12px; color: var(--text2); margin-top: 3px; }
+.sync-btn { display: flex; align-items: center; gap: 8px; background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 8px 16px; color: var(--text2); font-size: 12px; cursor: pointer; transition: all .2s; font-family: var(--font); }
+.sync-btn:hover { border-color: var(--accent); color: var(--accent); }
+.sync-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent2); animation: pulse 2s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+.config-banner { margin: 16px 32px; background: linear-gradient(135deg, #1a2040, #1e2d40); border: 1px solid #2a4070; border-radius: var(--radius); padding: 14px 20px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.config-banner input { flex: 1; min-width: 200px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; color: var(--text); font-family: var(--mono); font-size: 12px; outline: none; }
+.config-banner input:focus { border-color: var(--accent); }
+.config-banner button { padding: 8px 16px; background: var(--accent); border: none; border-radius: 8px; color: #fff; font-size: 12px; cursor: pointer; font-family: var(--font); font-weight: 500; white-space: nowrap; }
+.config-banner button:hover { background: #6fa3ff; }
+.config-label { font-size: 12px; color: var(--text2); white-space: nowrap; }
+.config-status { font-size: 11px; color: var(--text3); white-space: nowrap; }
+.config-status.ok { color: var(--accent2); }
+.config-status.err { color: var(--red); }
+
+.tabs { display: flex; gap: 2px; padding: 0 32px; margin-bottom: 24px; border-bottom: 1px solid var(--border); }
+.tab { padding: 12px 20px; font-size: 13px; color: var(--text2); cursor: pointer; border-bottom: 2px solid transparent; transition: all .2s; }
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 500; }
+
+.content { padding: 0 32px 32px; }
+
+.kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 24px; }
+.kpi { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; }
+.kpi-label { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 8px; }
+.kpi-val { font-size: 24px; font-weight: 700; font-family: var(--mono); color: var(--text); }
+.kpi-sub { font-size: 11px; color: var(--text2); margin-top: 4px; }
+.kpi-val.up { color: var(--accent2); }
+.kpi-val.hi { color: var(--accent); }
+
+.filters { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; align-items: center; }
+.filters label { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: .5px; }
+.filters select { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 7px 12px; color: var(--text); font-size: 12px; font-family: var(--font); outline: none; cursor: pointer; }
+.filters select:focus { border-color: var(--accent); }
+
+.chart-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+.chart-row.full { grid-template-columns: 1fr; }
+.chart-card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
+.chart-title { font-size: 12px; color: var(--text2); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 16px; }
+.chart-wrap { position: relative; }
+
+.table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg2); }
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+thead th { padding: 12px 14px; text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .5px; color: var(--text3); border-bottom: 1px solid var(--border); white-space: nowrap; font-weight: 500; }
+tbody td { padding: 10px 14px; border-bottom: 1px solid #1e2335; white-space: nowrap; color: var(--text); }
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover td { background: var(--bg3); }
+.mono { font-family: var(--mono); }
+.badge { font-size: 10px; padding: 2px 8px; border-radius: 4px; }
+.badge-blue { background: rgba(79,142,247,.15); color: #7ab0ff; }
+.slot-tag { display: inline-flex; align-items: center; gap: 4px; background: var(--bg3); border: 1px solid var(--border); border-radius: 5px; padding: 2px 8px; font-family: var(--mono); font-size: 11px; color: var(--accent); }
+
+.form-card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; margin-bottom: 16px; }
+.form-title { font-size: 14px; font-weight: 600; margin-bottom: 18px; color: var(--text); }
+.form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 18px; }
+.form-group label { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: .5px; color: var(--text3); margin-bottom: 6px; }
+.form-group input, .form-group select { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 9px 12px; color: var(--text); font-size: 13px; font-family: var(--font); outline: none; transition: border .2s; }
+.form-group input:focus, .form-group select:focus { border-color: var(--accent); }
+.form-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.btn { padding: 9px 20px; border-radius: 8px; font-size: 13px; font-family: var(--font); cursor: pointer; font-weight: 500; border: none; transition: all .2s; }
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover { background: #6fa3ff; }
+.btn-secondary { background: var(--bg3); border: 1px solid var(--border); color: var(--text2); }
+.btn-secondary:hover { border-color: var(--accent2); color: var(--accent2); }
+.btn-danger { background: rgba(242,107,107,.1); border: 1px solid rgba(242,107,107,.3); color: var(--red); }
+
+.status-bar { font-size: 12px; padding: 10px 14px; border-radius: 8px; margin-bottom: 14px; }
+.status-bar.info { background: rgba(79,142,247,.1); color: #7ab0ff; border: 1px solid rgba(79,142,247,.2); }
+.status-bar.ok { background: rgba(52,201,138,.1); color: var(--accent2); border: 1px solid rgba(52,201,138,.2); }
+.status-bar.err { background: rgba(242,107,107,.1); color: var(--red); border: 1px solid rgba(242,107,107,.2); }
+
+.guide { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; }
+.guide h3 { font-size: 14px; font-weight: 600; margin-bottom: 16px; color: var(--accent); }
+.guide-steps { display: flex; flex-direction: column; gap: 14px; }
+.guide-step { display: flex; gap: 14px; align-items: flex-start; }
+.step-num { width: 28px; height: 28px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.step-content { flex: 1; }
+.step-content h4 { font-size: 13px; font-weight: 500; margin-bottom: 4px; }
+.step-content p { font-size: 12px; color: var(--text2); line-height: 1.6; }
+.step-content code { font-family: var(--mono); background: var(--bg3); padding: 1px 6px; border-radius: 4px; font-size: 11px; color: var(--accent3); }
+.step-link { display: inline-flex; align-items: center; gap: 5px; margin-top: 6px; padding: 6px 12px; background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; color: var(--accent); font-size: 12px; text-decoration: none; }
+.step-link:hover { border-color: var(--accent); }
+
+.modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.7); z-index:1000; display:flex; align-items:center; justify-content:center; }
+.modal { background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius); padding:28px; width:680px; max-width:95vw; max-height:90vh; overflow-y:auto; }
+.modal-title { font-size:16px; font-weight:600; margin-bottom:20px; display:flex; justify-content:space-between; align-items:center; }
+.modal-close { background:none; border:none; color:var(--text2); font-size:20px; cursor:pointer; padding:0 4px; }
+.modal-close:hover { color:var(--text); }
+.modal-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(190px, 1fr)); gap:12px; margin-bottom:18px; }
+.modal-actions { display:flex; gap:10px; justify-content:flex-end; }
+.edit-btn { background:none; border:1px solid var(--border); border-radius:5px; color:var(--text3); font-size:11px; padding:3px 8px; cursor:pointer; transition:all .15s; }
+.edit-btn:hover { border-color:var(--accent); color:var(--accent); }
+.del-btn { background:none; border:1px solid rgba(242,107,107,.3); border-radius:5px; color:var(--red); font-size:11px; padding:3px 8px; cursor:pointer; transition:all .15s; opacity:.6; }
+.del-btn:hover { opacity:1; background:rgba(242,107,107,.1); }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <h1>🧬 益生菌限搶銷售分析儀表板</h1>
+    <p>MOMO 益生菌三入組 · 歷次限搶活動追蹤</p>
+  </div>
+  <button class="sync-btn" onclick="fetchSheetData()">
+    <span class="sync-dot" id="dot"></span>
+    <span id="sync-label">重新整理數據</span>
+  </button>
+</div>
+
+<div class="config-banner">
+  <span class="config-label">📊 Google Sheets ID：</span>
+  <input type="text" id="sheet-id" placeholder="貼上你的 Google Sheets ID" oninput="saveSheetId()">
+  <button onclick="fetchSheetData()">載入最新數據</button>
+  <span class="config-status" id="sheet-status">尚未設定 · 目前顯示內建歷史數據</span>
+</div>
+
+<div class="tabs">
+  <div class="tab active" onclick="setTab('overview')">📈 總覽分析</div>
+  <div class="tab" onclick="setTab('detail')">📋 場次明細</div>
+  <div class="tab" onclick="setTab('add')">➕ 新增場次</div>
+  <div class="tab" onclick="setTab('guide')">🔗 Google 表單設定</div>
+</div>
+
+<div class="content" id="tab-overview">
+  <div class="kpis" id="kpi-cards"></div>
+  <div class="filters">
+    <label>時段篩選：</label>
+    <select id="f-slot" onchange="renderOverview()">
+      <option value="all">全部時段</option>
+      <option value="midnight">凌晨 00-08</option>
+      <option value="morning">早場 07-12</option>
+      <option value="noon">中午 11-14</option>
+      <option value="afternoon">下午 14-18</option>
+      <option value="evening">晚上 18-22</option>
+      <option value="latenight">深夜 22-24</option>
+    </select>
+    <label>時數：</label>
+    <select id="f-hours" onchange="renderOverview()">
+      <option value="all">全部</option>
+      <option value="2">2小時</option>
+      <option value="3">3小時</option>
+      <option value="4">4小時</option>
+      <option value="7">7小時</option>
+      <option value="8">8小時</option>
+    </select>
+    <label>售價：</label>
+    <select id="f-price" onchange="renderOverview()">
+      <option value="all">全部</option>
+      <option value="2290">$2,290</option>
+      <option value="2360">$2,360</option>
+      <option value="2410">$2,410</option>
+    </select>
+  </div>
+  <div class="chart-row full">
+    <div class="chart-card">
+      <div class="chart-title">限搶時段進價 vs 全日進價（NT$）</div>
+      <div class="chart-wrap" style="height:240px"><canvas id="c-trend"></canvas></div>
+    </div>
+  </div>
+  <div class="chart-row">
+    <div class="chart-card">
+      <div class="chart-title">各場次銷售組數</div>
+      <div class="chart-wrap" style="height:200px"><canvas id="c-qty"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">限搶時段銷售占比 (%)</div>
+      <div class="chart-wrap" style="height:200px"><canvas id="c-ratio"></canvas></div>
+    </div>
+  </div>
+  <div class="chart-row">
+    <div class="chart-card">
+      <div class="chart-title">售價 vs 全日進價 關係</div>
+      <div class="chart-wrap" style="height:200px"><canvas id="c-scatter"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">時段區間平均全日進價</div>
+      <div class="chart-wrap" style="height:200px"><canvas id="c-slot-avg"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<div class="content" id="tab-detail" style="display:none">
+  <div class="filters" style="justify-content:space-between">
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <label>時段：</label>
+      <select id="fd-slot" onchange="renderDetail()">
+        <option value="all">全部</option>
+        <option value="midnight">凌晨</option>
+        <option value="morning">早場</option>
+        <option value="noon">中午</option>
+        <option value="afternoon">下午</option>
+        <option value="evening">晚上</option>
+        <option value="latenight">深夜</option>
+      </select>
+      <label>售價：</label>
+      <select id="fd-price" onchange="renderDetail()">
+        <option value="all">全部</option>
+        <option value="2290">$2,290</option>
+        <option value="2360">$2,360</option>
+        <option value="2410">$2,410</option>
+      </select>
+      <label>排序：</label>
+      <select id="fd-sort" onchange="renderDetail()">
+        <option value="date">日期</option>
+        <option value="total">全日進價↓</option>
+        <option value="qty">銷售組數↓</option>
+        <option value="ratio">限搶占比↓</option>
+      </select>
+    </div>
+    <button class="btn btn-secondary" onclick="exportDetailCSV()" style="white-space:nowrap">⬇ 匯出 CSV</button>
+  </div>
+  <div class="table-wrap" id="detail-tbl"></div>
+</div>
+
+<div class="content" id="tab-add" style="display:none">
+  <div class="status-bar info" id="add-status">填寫後點「新增至清單」，再「匯出 CSV」貼到 Google Sheets。</div>
+  <div class="form-card">
+    <div class="form-title">新增限搶場次資料</div>
+    <div class="form-grid">
+      <div class="form-group"><label>日期（例：6/15(三)）</label><input id="fa-date" placeholder="6/15(三)"></div>
+      <div class="form-group"><label>時段</label>
+        <select id="fa-slot">
+          <option>00:00-07:00</option><option>00:00-08:00</option>
+          <option>07:00-11:00</option><option>08:00-12:00</option>
+          <option>11:00-14:00</option><option>14:00-18:00</option>
+          <option>18:00-22:00</option><option>22:00-24:00</option>
+        </select>
+      </div>
+      <div class="form-group"><label>限搶時數</label><input id="fa-hours" type="number" placeholder="4"></div>
+      <div class="form-group"><label>限搶金額</label>
+        <select id="fa-price"><option value="2290">2,290</option><option value="2360" selected>2,360</option><option value="2410">2,410</option></select>
+      </div>
+      <div class="form-group"><label>贈送案型</label><input id="fa-gift" placeholder="例：$88+3%"></div>
+      <div class="form-group"><label>限搶時段進價</label><input id="fa-frev" type="number" placeholder="65772"></div>
+      <div class="form-group"><label>限搶時段銷售占比</label><input id="fa-ratio" type="number" step="0.001" placeholder="0.485"></div>
+      <div class="form-group"><label>非限搶時段進價</label><input id="fa-nfrev" type="number" placeholder="69750"></div>
+      <div class="form-group"><label>銷售組數</label><input id="fa-qty" type="number" placeholder="51"></div>
+      <div class="form-group"><label>退貨組數</label><input id="fa-ret" type="number" placeholder="0"></div>
+      <div class="form-group"><label>全日進價</label><input id="fa-total" type="number" placeholder="135522"></div>
+      <div class="form-group"><label>備註</label><input id="fa-note" placeholder="包套/廣告..."></div>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-primary" onclick="addRecord()">➕ 新增至清單</button>
+      <button class="btn btn-secondary" onclick="exportCSV()">⬇ 匯出 CSV</button>
+      <button class="btn btn-secondary" onclick="clearNew()">清除新增</button>
+    </div>
+  </div>
+  <div class="table-wrap" id="add-tbl"></div>
+</div>
+
+<div class="content" id="tab-guide" style="display:none">
+  <div class="guide">
+    <h3>🔗 如何用 Google 表單自動更新儀表板</h3>
+    <div class="guide-steps">
+      <div class="guide-step">
+        <div class="step-num">1</div>
+        <div class="step-content">
+          <h4>建立 Google 試算表</h4>
+          <p>前往 Google 試算表，建立新試算表，命名為「益生菌限搶數據」。工作表名稱設為「限搶數據」。<br>
+          第一列標題依序填入：日期、時段、限搶時數、限搶金額、贈送案型、限搶時段進價、限搶時段銷售占比、非限搶時段進價、銷售組數、退貨組數、全日進價、備註</p>
+        </div>
+      </div>
+      <div class="guide-step">
+        <div class="step-num">2</div>
+        <div class="step-content">
+          <h4>設定試算表為公開</h4>
+          <p>在試算表右上角點「共用」→「一般存取權」改為「知道連結的任何人」→ 角色設為「檢視者」→ 點「完成」。</p>
+        </div>
+      </div>
+      <div class="guide-step">
+        <div class="step-num">3</div>
+        <div class="step-content">
+          <h4>取得試算表 ID</h4>
+          <p>從網址列複製 ID，格式為：<br>
+          <code>https://docs.google.com/spreadsheets/d/【這段就是ID】/edit</code></p>
+        </div>
+      </div>
+      <div class="guide-step">
+        <div class="step-num">4</div>
+        <div class="step-content">
+          <h4>將 ID 貼入儀表板</h4>
+          <p>將 ID 貼入頂端輸入框，點「載入最新數據」即可。<br>
+          之後每次新增數據，回來點「重新整理數據」即可更新！</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="edit-modal" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <div class="modal-title">
+      <span>✏️ 修改場次資料</span>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-grid">
+      <div class="form-group"><label>日期</label><input id="m-date" placeholder="6/15(三)"></div>
+      <div class="form-group"><label>時段</label>
+        <select id="m-slot">
+          <option>00:00-07:00</option><option>00:00-08:00</option>
+          <option>07:00-11:00</option><option>08:00-12:00</option>
+          <option>11:00-14:00</option><option>14:00-18:00</option>
+          <option>18:00-22:00</option><option>22:00-24:00</option>
+        </select>
+      </div>
+      <div class="form-group"><label>限搶時數</label><input id="m-h" type="number"></div>
+      <div class="form-group"><label>限搶金額</label>
+        <select id="m-price"><option value="2290">2,290</option><option value="2360">2,360</option><option value="2410">2,410</option></select>
+      </div>
+      <div class="form-group"><label>贈送案型</label><input id="m-gift"></div>
+      <div class="form-group"><label>限搶時段進價</label><input id="m-frev" type="number"></div>
+      <div class="form-group"><label>限搶時段銷售占比</label><input id="m-ratio" type="number" step="0.001"></div>
+      <div class="form-group"><label>非限搶時段進價</label><input id="m-nfrev" type="number"></div>
+      <div class="form-group"><label>銷售組數</label><input id="m-qty" type="number"></div>
+      <div class="form-group"><label>退貨組數</label><input id="m-ret" type="number"></div>
+      <div class="form-group"><label>全日進價</label><input id="m-total" type="number"></div>
+      <div class="form-group"><label>備註</label><input id="m-note"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-danger" onclick="deleteRecord()">🗑 刪除此筆</button>
+      <button class="btn btn-secondary" onclick="closeModal()">取消</button>
+      <button class="btn btn-primary" onclick="saveEdit()">✓ 儲存修改</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const HIST = [
+  {date:'7/2(三)',slot:'08:00-12:00',h:4,price:2360,gift:'88',fRev:65772,ratio:0.485323,nfRev:69750,qty:51,ret:0,total:135522,note:''},
+  {date:'7/21(一)',slot:'00:00-08:00',h:8,price:2360,gift:'$88+3%',fRev:77349,ratio:0.434079,nfRev:100842,qty:68,ret:2,total:178191,note:''},
+  {date:'7/31(三)',slot:'00:00-07:00',h:7,price:2360,gift:'$88+3%',fRev:61522,ratio:0.335171,nfRev:122032,qty:70,ret:3,total:183554,note:''},
+  {date:'8/7(四)',slot:'18:00-22:00',h:4,price:2360,gift:'$88+3%',fRev:78683,ratio:0.532776,nfRev:69002,qty:52,ret:1,total:147685,note:''},
+  {date:'8/13(三)',slot:'07:00-11:00',h:4,price:2360,gift:'收納袋',fRev:50881,ratio:0.46319,nfRev:58968,qty:48,ret:1,total:109849,note:''},
+  {date:'8/20(三)',slot:'22:00-24:00',h:2,price:2360,gift:'50',fRev:43098,ratio:0.451137,nfRev:52434,qty:34,ret:1,total:95532,note:''},
+  {date:'8/31(日)',slot:'07:00-11:00',h:4,price:2360,gift:'行李秤',fRev:35837,ratio:0.227381,nfRev:121771,qty:59,ret:1,total:157608,note:''},
+  {date:'9/3(三)',slot:'18:00-22:00',h:4,price:2360,gift:'行李秤',fRev:30583,ratio:0.454624,nfRev:36688,qty:20,ret:4,total:67271,note:''},
+  {date:'9/4(四)',slot:'11:00-14:00',h:3,price:2360,gift:'50',fRev:53862,ratio:0.50121,nfRev:53602,qty:37,ret:0,total:107464,note:''},
+  {date:'9/12(五)',slot:'14:00-18:00',h:4,price:2360,gift:'50',fRev:50436,ratio:0.389913,nfRev:78916,qty:55,ret:0,total:129352,note:''},
+  {date:'9/21(日)',slot:'00:00-07:00',h:7,price:2360,gift:'行李秤',fRev:39422,ratio:0.341207,nfRev:76115,qty:32,ret:0,total:115537,note:''},
+  {date:'10/11(六)',slot:'11:00-14:00',h:3,price:2360,gift:'50',fRev:36461,ratio:0.450464,nfRev:44480,qty:21,ret:0,total:80941,note:'包套'},
+  {date:'10/14(二)',slot:'00:00-07:00',h:7,price:2360,gift:'行李秤',fRev:22109,ratio:0.249138,nfRev:66633,qty:28,ret:0,total:88742,note:''},
+  {date:'10/27(一)',slot:'18:00-22:00',h:4,price:2290,gift:'指甲剪',fRev:58273,ratio:0.636669,nfRev:33255,qty:31,ret:1,total:91528,note:''},
+  {date:'11/3(一)',slot:'00:00-07:00',h:7,price:2290,gift:'指甲剪',fRev:39628,ratio:0.232727,nfRev:130649,qty:71,ret:5,total:170277,note:'包套'},
+  {date:'11/8(六)',slot:'18:00-22:00',h:4,price:2290,gift:'$100+指甲剪',fRev:77841,ratio:0.453122,nfRev:93947,qty:60,ret:1,total:171788,note:''},
+  {date:'11/19(三)',slot:'00:00-07:00',h:7,price:2360,gift:'$50+指甲剪',fRev:24348,ratio:0.375578,nfRev:40480,qty:21,ret:1,total:64828,note:''},
+  {date:'11/27(四)',slot:'00:00-07:00',h:7,price:2290,gift:'指甲剪',fRev:24072,ratio:0.26992,nfRev:65110,qty:35,ret:0,total:89182,note:''},
+  {date:'12/4(四)',slot:'22:00-24:00',h:2,price:2290,gift:'指甲剪',fRev:27512,ratio:0.332427,nfRev:55249,qty:24,ret:1,total:82761,note:'包套'},
+  {date:'2/10(二)',slot:'00:00-07:00',h:7,price:2410,gift:'$50+$50',fRev:48679,ratio:0.33672,nfRev:95889,qty:45,ret:0,total:144568,note:'包套'},
+  {date:'3/13(五)',slot:'07:00-11:00',h:4,price:2410,gift:'$100+指甲剪',fRev:71032,ratio:0.527809,nfRev:63547,qty:53,ret:6,total:134579,note:''},
+  {date:'3/19(四)',slot:'00:00-07:00',h:7,price:2410,gift:'$100+指甲剪',fRev:28056,ratio:0.24267,nfRev:87558,qty:44,ret:5,total:115614,note:'補3'},
+  {date:'4/4(六)',slot:'14:00-18:00',h:4,price:2410,gift:'100',fRev:119942,ratio:0.435175,nfRev:155676,qty:111,ret:4,total:275618,note:'包套/MOMOLINE曝光'},
+  {date:'4/17(五)',slot:'14:00-18:00',h:4,price:2410,gift:'100',fRev:52964,ratio:0.587718,nfRev:37154,qty:33,ret:1,total:90118,note:'廣告壞掉'},
+  {date:'4/27(一)',slot:'18:00-22:00',h:4,price:2410,gift:'100',fRev:52404,ratio:0.581311,nfRev:37744,qty:29,ret:0,total:90148,note:'LINE桌機(曝光型)'},
+  {date:'5/10(日)',slot:'14:00-18:00',h:4,price:2410,gift:'100',fRev:89170,ratio:0.384135,nfRev:142962,qty:78,ret:1,total:232132,note:'包套/MOMOLINE曝光'},
+];
+
+let allData = [...HIST];
+let newRecords = [];
+let charts = {};
+let editIdx = -1;
+
+const fmt = n => Number(n||0).toLocaleString('zh-TW');
+const fmtP = n => (Number(n||0)*100).toFixed(1)+'%';
+const fmtPv = n => (Number(n||0)*100).toFixed(1);
+
+function slotCat(slot) {
+  const h = parseInt(slot);
+  if (slot.startsWith('00') || h < 7) return 'midnight';
+  if (h >= 7 && h < 11) return 'morning';
+  if (h === 11) return 'noon';
+  if (h >= 14 && h < 18) return 'afternoon';
+  if (h >= 18 && h < 22) return 'evening';
+  if (h >= 22) return 'latenight';
+  return 'morning';
+}
+
+function getFiltered() {
+  const sf = document.getElementById('f-slot')?.value||'all';
+  const hf = document.getElementById('f-hours')?.value||'all';
+  const pf = document.getElementById('f-price')?.value||'all';
+  return allData.filter(r => {
+    if (sf !== 'all' && slotCat(r.slot) !== sf) return false;
+    if (hf !== 'all' && r.h != hf) return false;
+    if (pf !== 'all' && r.price != pf) return false;
+    return true;
+  });
+}
+
+function destroyChart(id) { if(charts[id]){charts[id].destroy();delete charts[id];} }
+
+function renderOverview() {
+  const d = getFiltered();
+  if (!d.length) return;
+  const avgTotal = d.reduce((a,r)=>a+r.total,0)/d.length;
+  const totalQty = d.reduce((a,r)=>a+r.qty,0);
+  const avgRatio = d.reduce((a,r)=>a+r.ratio,0)/d.length;
+  const best = d.reduce((a,r)=>r.total>a.total?r:a, d[0]);
+  document.getElementById('kpi-cards').innerHTML = `
+    <div class="kpi"><div class="kpi-label">場次數</div><div class="kpi-val hi">${d.length}</div><div class="kpi-sub">限搶活動</div></div>
+    <div class="kpi"><div class="kpi-label">總銷售組數</div><div class="kpi-val up">${fmt(totalQty)}</div><div class="kpi-sub">組</div></div>
+    <div class="kpi"><div class="kpi-label">平均全日進價</div><div class="kpi-val">$${fmt(Math.round(avgTotal))}</div><div class="kpi-sub">每場均值</div></div>
+    <div class="kpi"><div class="kpi-label">平均限搶占比</div><div class="kpi-val">${fmtP(avgRatio)}</div><div class="kpi-sub">限搶/全日</div></div>
+    <div class="kpi"><div class="kpi-label">最高場次</div><div class="kpi-val hi">$${fmt(best.total)}</div><div class="kpi-sub">${best.date} ${best.slot}</div></div>
+  `;
+
+  const labels = d.map(r=>r.date);
+  Chart.defaults.color = '#8b92b0';
+  Chart.defaults.borderColor = '#2a3050';
+
+  destroyChart('c-trend');
+  charts['c-trend'] = new Chart(document.getElementById('c-trend'), {type:'line', data:{labels, datasets:[
+    {label:'限搶時段進價',data:d.map(r=>r.fRev),borderColor:'#4f8ef7',backgroundColor:'rgba(79,142,247,.08)',tension:.35,pointRadius:4,pointBackgroundColor:'#4f8ef7'},
+    {label:'全日進價',data:d.map(r=>r.total),borderColor:'#34c98a',backgroundColor:'rgba(52,201,138,.08)',tension:.35,pointRadius:4,pointBackgroundColor:'#34c98a',borderDash:[5,3]}
+  ]}, options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#8b92b0',font:{size:11}}}},scales:{
+    x:{ticks:{color:'#525a75',font:{size:10},maxRotation:45},grid:{color:'#1e2335'}},
+    y:{ticks:{color:'#525a75',callback:v=>'$'+Math.round(v/1000)+'k'},grid:{color:'#1e2335'}}
+  }}});
+
+  destroyChart('c-qty');
+  charts['c-qty'] = new Chart(document.getElementById('c-qty'), {type:'bar', data:{labels, datasets:[
+    {label:'銷售組數',data:d.map(r=>r.qty),backgroundColor:'rgba(79,142,247,.7)',borderRadius:4},
+    {label:'退貨組數',data:d.map(r=>r.ret),backgroundColor:'rgba(242,107,107,.7)',borderRadius:4}
+  ]}, options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#8b92b0',font:{size:11}}}},scales:{
+    x:{ticks:{color:'#525a75',font:{size:10},maxRotation:45},grid:{color:'#1e2335'}},
+    y:{ticks:{color:'#525a75'},grid:{color:'#1e2335'}}
+  }}});
+
+  destroyChart('c-ratio');
+  const ratioColors = d.map(r=>r.ratio>=.5?'rgba(52,201,138,.75)':r.ratio>=.35?'rgba(79,142,247,.75)':'rgba(247,168,79,.75)');
+  charts['c-ratio'] = new Chart(document.getElementById('c-ratio'), {type:'bar', data:{labels, datasets:[
+    {label:'占比%',data:d.map(r=>parseFloat(fmtPv(r.ratio))),backgroundColor:ratioColors,borderRadius:4}
+  ]}, options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{
+    x:{ticks:{color:'#525a75',font:{size:10},maxRotation:45},grid:{color:'#1e2335'}},
+    y:{ticks:{color:'#525a75',callback:v=>v+'%'},grid:{color:'#1e2335'},max:100}
+  }}});
+
+  destroyChart('c-scatter');
+  const priceColors = {2290:'rgba(247,168,79,.8)',2360:'rgba(79,142,247,.8)',2410:'rgba(52,201,138,.8)'};
+  charts['c-scatter'] = new Chart(document.getElementById('c-scatter'), {type:'scatter', data:{datasets:[
+    {label:'$2,290',data:d.filter(r=>r.price===2290).map(r=>({x:r.qty,y:r.total})),backgroundColor:priceColors[2290],pointRadius:6},
+    {label:'$2,360',data:d.filter(r=>r.price===2360).map(r=>({x:r.qty,y:r.total})),backgroundColor:priceColors[2360],pointRadius:6},
+    {label:'$2,410',data:d.filter(r=>r.price===2410).map(r=>({x:r.qty,y:r.total})),backgroundColor:priceColors[2410],pointRadius:6},
+  ]}, options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#8b92b0',font:{size:11}}}},scales:{
+    x:{title:{display:true,text:'銷售組數',color:'#525a75'},ticks:{color:'#525a75'},grid:{color:'#1e2335'}},
+    y:{title:{display:true,text:'全日進價',color:'#525a75'},ticks:{color:'#525a75',callback:v=>'$'+Math.round(v/1000)+'k'},grid:{color:'#1e2335'}}
+  }}});
+
+  const cats = ['midnight','morning','noon','afternoon','evening','latenight'];
+  const catLabels = {'midnight':'凌晨','morning':'早場','noon':'中午','afternoon':'下午','evening':'晚上','latenight':'深夜'};
+  const catAvg = cats.map(c => {
+    const rows = allData.filter(r=>slotCat(r.slot)===c);
+    return rows.length ? Math.round(rows.reduce((a,r)=>a+r.total,0)/rows.length) : 0;
+  });
+  destroyChart('c-slot-avg');
+  charts['c-slot-avg'] = new Chart(document.getElementById('c-slot-avg'), {type:'bar', data:{
+    labels:cats.map(c=>catLabels[c]),
+    datasets:[{label:'平均全日進價',data:catAvg,backgroundColor:'rgba(79,142,247,.7)',borderRadius:6}]
+  }, options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{
+    x:{ticks:{color:'#525a75'},grid:{color:'#1e2335'}},
+    y:{ticks:{color:'#525a75',callback:v=>'$'+Math.round(v/1000)+'k'},grid:{color:'#1e2335'}}
+  }}});
+}
+
+function renderDetail() {
+  const sf = document.getElementById('fd-slot')?.value||'all';
+  const pf = document.getElementById('fd-price')?.value||'all';
+  const srt = document.getElementById('fd-sort')?.value||'date';
+  let d = [...allData];
+  if (sf!=='all') d = d.filter(r=>slotCat(r.slot)===sf);
+  if (pf!=='all') d = d.filter(r=>r.price==pf);
+  if (srt==='total') d.sort((a,b)=>b.total-a.total);
+  else if (srt==='qty') d.sort((a,b)=>b.qty-a.qty);
+  else if (srt==='ratio') d.sort((a,b)=>b.ratio-a.ratio);
+
+  const rows = d.map(r=>{
+    const origIdx = allData.indexOf(r);
+    return `<tr>
+    <td class="mono">${r.date}</td>
+    <td><span class="slot-tag">${r.slot}</span></td>
+    <td class="mono">${r.h}h</td>
+    <td class="mono">$${fmt(r.price)}</td>
+    <td>${r.gift}</td>
+    <td class="mono">$${fmt(r.fRev)}</td>
+    <td class="mono">${fmtP(r.ratio)}</td>
+    <td class="mono">$${fmt(r.nfRev)}</td>
+    <td class="mono">${r.qty}</td>
+    <td class="mono" style="color:${r.ret>0?'var(--red)':'var(--text2)'}">${r.ret}</td>
+    <td class="mono" style="color:var(--accent2)">$${fmt(r.total)}</td>
+    <td>${r.note?`<span class="badge badge-blue">${r.note}</span>`:''}</td>
+    <td><button class="edit-btn" onclick="openEdit(${origIdx})">✏ 編輯</button></td>
+  </tr>`;
+  }).join('');
+  document.getElementById('detail-tbl').innerHTML = `<table>
+    <thead><tr><th>日期</th><th>時段</th><th>時數</th><th>售價</th><th>贈品</th><th>限搶進價</th><th>占比</th><th>非限搶進價</th><th>銷售</th><th>退貨</th><th>全日進價</th><th>備註</th><th style="width:60px"></th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+function openEdit(idx) {
+  editIdx = idx;
+  const r = allData[idx];
+  document.getElementById('m-date').value = r.date;
+  document.getElementById('m-slot').value = r.slot;
+  document.getElementById('m-h').value = r.h;
+  document.getElementById('m-price').value = r.price;
+  document.getElementById('m-gift').value = r.gift;
+  document.getElementById('m-frev').value = r.fRev;
+  document.getElementById('m-ratio').value = r.ratio;
+  document.getElementById('m-nfrev').value = r.nfRev;
+  document.getElementById('m-qty').value = r.qty;
+  document.getElementById('m-ret').value = r.ret;
+  document.getElementById('m-total').value = r.total;
+  document.getElementById('m-note').value = r.note;
+  document.getElementById('edit-modal').style.display = 'flex';
+}
+
+function closeModal() {
+  document.getElementById('edit-modal').style.display = 'none';
+  editIdx = -1;
+}
+
+function saveEdit() {
+  if (editIdx < 0) return;
+  allData[editIdx] = {
+    date: document.getElementById('m-date').value.trim(),
+    slot: document.getElementById('m-slot').value,
+    h: parseInt(document.getElementById('m-h').value)||4,
+    price: parseInt(document.getElementById('m-price').value),
+    gift: document.getElementById('m-gift').value,
+    fRev: parseFloat(document.getElementById('m-frev').value)||0,
+    ratio: parseFloat(document.getElementById('m-ratio').value)||0,
+    nfRev: parseFloat(document.getElementById('m-nfrev').value)||0,
+    qty: parseInt(document.getElementById('m-qty').value)||0,
+    ret: parseInt(document.getElementById('m-ret').value)||0,
+    total: parseFloat(document.getElementById('m-total').value)||0,
+    note: document.getElementById('m-note').value,
+  };
+  closeModal();
+  renderDetail();
+  renderOverview();
+}
+
+function deleteRecord() {
+  if (editIdx < 0) return;
+  if (confirm('確定刪除這筆資料？')) {
+    allData.splice(editIdx, 1);
+    closeModal();
+    renderDetail();
+    renderOverview();
+  }
+}
+
+function addRecord() {
+  const r = {
+    date: document.getElementById('fa-date').value.trim()||'新場次',
+    slot: document.getElementById('fa-slot').value,
+    h: parseInt(document.getElementById('fa-hours').value)||4,
+    price: parseInt(document.getElementById('fa-price').value),
+    gift: document.getElementById('fa-gift').value,
+    fRev: parseInt(document.getElementById('fa-frev').value)||0,
+    ratio: parseFloat(document.getElementById('fa-ratio').value)||0,
+    nfRev: parseInt(document.getElementById('fa-nfrev').value)||0,
+    qty: parseInt(document.getElementById('fa-qty').value)||0,
+    ret: parseInt(document.getElementById('fa-ret').value)||0,
+    total: parseInt(document.getElementById('fa-total').value)||0,
+    note: document.getElementById('fa-note').value,
+    isNew: true
+  };
+  allData.push(r);
+  newRecords.push(r);
+  renderAddTable();
+  const s = document.getElementById('add-status');
+  s.className = 'status-bar ok';
+  s.textContent = `✓ 已新增「${r.date}」場次！共新增 ${newRecords.length} 筆。可匯出 CSV 後貼到 Google Sheets。`;
+}
+
+function renderAddTable() {
+  if (!newRecords.length) { document.getElementById('add-tbl').innerHTML=''; return; }
+  const rows = newRecords.map(r=>`<tr>
+    <td class="mono">${r.date}</td><td><span class="slot-tag">${r.slot}</span></td>
+    <td class="mono">${r.h}h</td><td class="mono">$${fmt(r.price)}</td>
+    <td>${r.gift}</td><td class="mono">$${fmt(r.fRev)}</td>
+    <td class="mono">${fmtP(r.ratio)}</td><td class="mono">${r.qty}</td>
+    <td class="mono">${r.ret}</td><td class="mono" style="color:var(--accent2)">$${fmt(r.total)}</td>
+    <td>${r.note}</td>
+  </tr>`).join('');
+  document.getElementById('add-tbl').innerHTML = `<table>
+    <thead><tr><th>日期</th><th>時段</th><th>時數</th><th>售價</th><th>贈品</th><th>限搶進價</th><th>占比</th><th>銷售</th><th>退貨</th><th>全日進價</th><th>備註</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+function clearNew() {
+  allData = allData.filter(r=>!r.isNew);
+  newRecords = [];
+  renderAddTable();
+  document.getElementById('add-status').className='status-bar info';
+  document.getElementById('add-status').textContent='填寫後點「新增至清單」，再「匯出 CSV」貼到 Google Sheets。';
+}
+
+function exportDetailCSV() {
+  const sf = document.getElementById('fd-slot')?.value||'all';
+  const pf = document.getElementById('fd-price')?.value||'all';
+  let d = [...allData];
+  if (sf!=='all') d = d.filter(r=>slotCat(r.slot)===sf);
+  if (pf!=='all') d = d.filter(r=>r.price==pf);
+  const header = '日期,時段,限搶時數,限搶金額,贈送案型,限搶時段進價,限搶時段銷售占比,非限搶時段進價,銷售組數,退貨組數,全日進價,備註';
+  const rows = d.map(r=>[r.date,r.slot,r.h,r.price,r.gift,r.fRev,r.ratio,r.nfRev,r.qty,r.ret,r.total,r.note].join(',')).join('\n');
+  const blob = new Blob(['\uFEFF'+header+'\n'+rows], {type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = '益生菌限搶銷售數據_' + new Date().toLocaleDateString('zh-TW').replace(/\//g,'-') + '.csv';
+  a.click();
+}
+
+function exportCSV() {
+  const header = '日期,時段,限搶時數,限搶金額,贈送案型,限搶時段進價,限搶時段銷售占比,非限搶時段進價,銷售組數,退貨組數,全日進價,備註';
+  const rows = allData.map(r=>[r.date,r.slot,r.h,r.price,r.gift,r.fRev,r.ratio,r.nfRev,r.qty,r.ret,r.total,r.note].join(',')).join('\n');
+  const blob = new Blob(['\uFEFF'+header+'\n'+rows], {type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = '益生菌限搶銷售數據.csv';
+  a.click();
+}
+
+function saveSheetId() {
+  const id = document.getElementById('sheet-id').value.trim();
+  localStorage.setItem('sheetId', id);
+}
+
+// ── 核心修正：改用 CSV 格式讀取，解決 CORS 問題 ──
+async function fetchSheetData() {
+  const id = document.getElementById('sheet-id').value.trim() || localStorage.getItem('sheetId');
+  if (!id) {
+    setStatus('尚未設定 Google Sheets ID，顯示內建數據', 'info');
+    return;
+  }
+  document.getElementById('sheet-id').value = id;
+  localStorage.setItem('sheetId', id);
+  setStatus('正在載入 Google Sheets 數據...', 'info');
+  document.getElementById('dot').style.background = '#f7a84f';
+
+  // 用 CSV export 格式，gid=0 為第一個工作表
+  const url = `https://docs.google.com/spreadsheets/d/${id}/export?format=csv&gid=0`;
+
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const text = await res.text();
+    const lines = text.trim().split('\n').map(l=>l.split(',').map(v=>v.replace(/^"|"$/g,'').trim()));
+
+    if (lines.length < 2) throw new Error('試算表無數據');
+
+    // 找標題列
+    const header = lines[0];
+    const idx = name => header.findIndex(c=>c===name);
+    const iDate=idx('日期'), iSlot=idx('時段'), iH=idx('限搶時數');
+    const iPrice=idx('限搶金額'), iGift=idx('贈送案型'), iFRev=idx('限搶時段進價');
+    const iRatio=idx('限搶時段銷售占比'), iNF=idx('非限搶時段進價');
+    const iQty=idx('銷售組數'), iRet=idx('退貨組數');
+    const iTotal=idx('全日進價'), iNote=idx('備註');
+
+    const parsed = lines.slice(1).map(v=>({
+      date:  v[iDate>=0?iDate:0]||'',
+      slot:  v[iSlot>=0?iSlot:1]||'',
+      h:     parseInt(v[iH>=0?iH:2])||4,
+      price: parseInt(v[iPrice>=0?iPrice:3])||2360,
+      gift:  v[iGift>=0?iGift:4]||'',
+      fRev:  parseFloat(v[iFRev>=0?iFRev:5])||0,
+      ratio: parseFloat(v[iRatio>=0?iRatio:6])||0,
+      nfRev: parseFloat(v[iNF>=0?iNF:7])||0,
+      qty:   parseInt(v[iQty>=0?iQty:8])||0,
+      ret:   parseInt(v[iRet>=0?iRet:9])||0,
+      total: parseFloat(v[iTotal>=0?iTotal:10])||0,
+      note:  v[iNote>=0?iNote:11]||'',
+    })).filter(r=>r.date && r.total>0 && r.date!=='日期');
+
+    if (parsed.length) {
+      allData = parsed;
+      setStatus(`✓ 已載入 ${parsed.length} 筆數據（更新時間：${new Date().toLocaleTimeString('zh-TW')}）`, 'ok');
+      document.getElementById('dot').style.background = '#34c98a';
+      renderOverview();
+      renderDetail();
+    } else {
+      setStatus('⚠ 試算表為空或欄位格式不符，顯示內建數據', 'err');
+      document.getElementById('dot').style.background = '#f26b6b';
+    }
+  } catch(e) {
+    setStatus('⚠ 無法讀取：' + e.message + '（請確認試算表已設為公開可檢視）', 'err');
+    document.getElementById('dot').style.background = '#f26b6b';
+  }
+}
+
+function setStatus(msg, type) {
+  const el = document.getElementById('sheet-status');
+  el.textContent = msg;
+  el.className = 'config-status' + (type==='ok'?' ok':type==='err'?' err':'');
+}
+
+function setTab(t) {
+  ['overview','detail','add','guide'].forEach(name=>{
+    document.getElementById('tab-'+name).style.display = name===t?'block':'none';
+  });
+  document.querySelectorAll('.tab').forEach((el,i)=>{
+    el.classList.toggle('active',['overview','detail','add','guide'][i]===t);
+  });
+  if (t==='overview') renderOverview();
+  if (t==='detail') renderDetail();
+  if (t==='add') renderAddTable();
+}
+
+const savedId = localStorage.getItem('sheetId');
+if (savedId) {
+  document.getElementById('sheet-id').value = savedId;
+  fetchSheetData();
+} else {
+  renderOverview();
+}
+</script>
+</body>
+</html>
