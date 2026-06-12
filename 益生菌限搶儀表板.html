@@ -226,6 +226,13 @@ tbody tr:hover td{background:var(--accent-l);}
       <option value="五">週五</option><option value="六">週六</option>
       <option value="日">週日</option>
     </select>
+    <label>推播：</label>
+    <select id="f-push" onchange="renderOverview()">
+      <option value="all">全部</option>
+      <option value="LINE APP">LINE APP</option>
+      <option value="LINE桌機">LINE桌機</option>
+      <option value="none">無推播</option>
+    </select>
   </div>
 
   <div class="chart-row full">
@@ -315,6 +322,13 @@ tbody tr:hover td{background:var(--accent-l);}
         <option value="五">週五</option><option value="六">週六</option>
         <option value="日">週日</option>
       </select>
+      <label>推播：</label>
+      <select id="fd-push" onchange="renderDetail()">
+        <option value="all">全部</option>
+        <option value="LINE APP">LINE APP</option>
+        <option value="LINE桌機">LINE桌機</option>
+        <option value="none">無推播</option>
+      </select>
       <label>排序：</label>
       <select id="fd-sort" onchange="renderDetail()">
         <option value="date">日期</option><option value="total">全日進價↓</option>
@@ -353,6 +367,13 @@ tbody tr:hover td{background:var(--accent-l);}
       <div class="form-group"><label>退貨組數</label><input id="fa-ret" type="number" placeholder="0"></div>
       <div class="form-group"><label>全日進價</label><input id="fa-total" type="number" placeholder="135522"></div>
       <div class="form-group"><label>廣告費用（選填）</label><input id="fa-adcost" type="number" placeholder="0"></div>
+      <div class="form-group"><label>推播類型（選填）</label>
+        <select id="fa-push">
+          <option value="">無</option>
+          <option value="LINE APP">LINE APP</option>
+          <option value="LINE桌機">LINE桌機</option>
+        </select>
+      </div>
       <div class="form-group"><label>備註</label><input id="fa-note" placeholder="包套/廣告..."></div>
     </div>
     <div class="form-actions">
@@ -418,6 +439,13 @@ tbody tr:hover td{background:var(--accent-l);}
       <div class="form-group"><label>退貨組數</label><input id="m-ret" type="number"></div>
       <div class="form-group"><label>全日進價</label><input id="m-total" type="number"></div>
       <div class="form-group"><label>廣告費用</label><input id="m-adcost" type="number"></div>
+      <div class="form-group"><label>推播類型</label>
+        <select id="m-push">
+          <option value="">無</option>
+          <option value="LINE APP">LINE APP</option>
+          <option value="LINE桌機">LINE桌機</option>
+        </select>
+      </div>
       <div class="form-group"><label>備註</label><input id="m-note"></div>
     </div>
     <div class="modal-actions">
@@ -486,16 +514,30 @@ function getWeekday(date){
   return m?m[1]:null;
 }
 
+// 推播類型：從 push 欄位讀取，或從 note 自動偵測
+function getPushType(r){
+  if(r.push) return r.push;
+  if(/LINE APP/i.test(r.note)) return 'LINE APP';
+  if(/LINE桌機/i.test(r.note)) return 'LINE桌機';
+  return '';
+}
+
 function getFiltered(){
   const sf=document.getElementById('f-slot')?.value||'all';
   const hf=document.getElementById('f-hours')?.value||'all';
   const pf=document.getElementById('f-price')?.value||'all';
   const wf=document.getElementById('f-weekday')?.value||'all';
+  const pushf=document.getElementById('f-push')?.value||'all';
   return allData.filter(r=>{
     if(sf!=='all'&&slotCat(r.slot)!==sf) return false;
     if(hf!=='all'&&r.h!=hf) return false;
     if(pf!=='all'&&r.price!=pf) return false;
     if(wf!=='all'&&getWeekday(r.date)!==wf) return false;
+    if(pushf!=='all'){
+      const pt=getPushType(r);
+      if(pushf==='none'&&pt!=='') return false;
+      if(pushf!=='none'&&pt!==pushf) return false;
+    }
     return true;
   });
 }
@@ -706,11 +748,19 @@ function renderDetail(){
   const sf=document.getElementById('fd-slot')?.value||'all';
   const pf=document.getElementById('fd-price')?.value||'all';
   const wf=document.getElementById('fd-weekday')?.value||'all';
+  const pushf=document.getElementById('fd-push')?.value||'all';
   const srt=document.getElementById('fd-sort')?.value||'date';
   let d=[...allData];
   if(sf!=='all') d=d.filter(r=>slotCat(r.slot)===sf);
   if(pf!=='all') d=d.filter(r=>r.price==pf);
   if(wf!=='all') d=d.filter(r=>getWeekday(r.date)===wf);
+  if(pushf!=='all'){
+    d=d.filter(r=>{
+      const pt=getPushType(r);
+      if(pushf==='none') return pt==='';
+      return pt===pushf;
+    });
+  }
   if(srt==='total') d.sort((a,b)=>b.total-a.total);
   else if(srt==='qty') d.sort((a,b)=>b.qty-a.qty);
   else if(srt==='ratio') d.sort((a,b)=>b.ratio-a.ratio);
@@ -729,12 +779,13 @@ function renderDetail(){
       <td class="mono">${r.qty}</td>
       <td class="mono" style="color:${r.ret>0?'var(--red)':'var(--text3)'}">${r.ret}</td>
       <td class="mono" style="color:var(--teal);font-weight:600">$${fmt(r.total)}</td>
-      <td>${bundleTag}${r.note&&!isBundle(r)?`<span class="badge badge-amber">${r.note}</span>`:''}</td>
+      <td>${bundleTag}${getPushType(r)?`<span class="badge badge-blue">${getPushType(r)}</span>`:''}</td>
+      <td>${r.note&&!isBundle(r)&&!getPushType(r)?`<span class="badge badge-amber">${r.note}</span>`:''}</td>
       <td><button class="edit-btn" onclick="openEdit(${origIdx})">✏ 編輯</button></td>
     </tr>`;
   }).join('');
   document.getElementById('detail-tbl').innerHTML=`<table>
-    <thead><tr><th>日期</th><th>時段</th><th>時數</th><th>售價</th><th>贈品</th><th>限搶進價</th><th>占比</th><th>非限搶進價</th><th>銷售</th><th>退貨</th><th>全日進價</th><th>備註</th><th></th></tr></thead>
+    <thead><tr><th>日期</th><th>時段</th><th>時數</th><th>售價</th><th>贈品</th><th>限搶進價</th><th>占比</th><th>非限搶進價</th><th>銷售</th><th>退貨</th><th>全日進價</th><th>推播</th><th>備註</th><th></th></tr></thead>
     <tbody>${rows}</tbody></table>`;
 }
 
@@ -752,6 +803,7 @@ function openEdit(idx){
   document.getElementById('m-ret').value=r.ret;
   document.getElementById('m-total').value=r.total;
   document.getElementById('m-adcost').value=r.adcost||0;
+  document.getElementById('m-push').value=r.push||'';
   document.getElementById('m-note').value=r.note;
   document.getElementById('edit-modal').style.display='flex';
 }
@@ -771,6 +823,7 @@ function saveEdit(){
     ret:parseInt(document.getElementById('m-ret').value)||0,
     total:parseFloat(document.getElementById('m-total').value)||0,
     adcost:parseFloat(document.getElementById('m-adcost').value)||0,
+    push:document.getElementById('m-push').value||'',
     note:document.getElementById('m-note').value,
   };
   closeModal();renderDetail();renderOverview();renderInsight();
@@ -794,6 +847,7 @@ function addRecord(){
     ret:parseInt(document.getElementById('fa-ret').value)||0,
     total:parseInt(document.getElementById('fa-total').value)||0,
     adcost:parseFloat(document.getElementById('fa-adcost').value)||0,
+    push:document.getElementById('fa-push').value||'',
     note:document.getElementById('fa-note').value,isNew:true
   };
   allData.push(r);newRecords.push(r);renderAddTable();
@@ -860,7 +914,7 @@ async function fetchSheetData(){
     const idx=name=>header.findIndex(c=>c===name);
     const iDate=idx('日期'),iSlot=idx('時段'),iH=idx('限搶時數'),iPrice=idx('限搶金額'),iGift=idx('贈送案型');
     const iFRev=idx('限搶時段進價'),iRatio=idx('限搶時段銷售占比'),iNF=idx('非限搶時段進價');
-    const iQty=idx('銷售組數'),iRet=idx('退貨組數'),iTotal=idx('全日進價'),iAd=idx('廣告費用'),iNote=idx('備註');
+    const iQty=idx('銷售組數'),iRet=idx('退貨組數'),iTotal=idx('全日進價'),iAd=idx('廣告費用'),iNote=idx('備註'),iPush=idx('推播類型');
     const parsed=lines.slice(1).map(v=>({
       date:v[iDate>=0?iDate:0]||'',slot:v[iSlot>=0?iSlot:1]||'',
       h:parseInt(v[iH>=0?iH:2])||4,price:parseInt(v[iPrice>=0?iPrice:3])||2360,
@@ -870,6 +924,7 @@ async function fetchSheetData(){
       total:parseFloat(v[iTotal>=0?iTotal:10])||0,
       adcost:iAd>=0?parseFloat(v[iAd])||0:0,
       note:v[iNote>=0?iNote:11]||'',
+      push:iPush>=0?v[iPush]||'':'',
     })).filter(r=>r.date&&r.total>0&&r.date!=='日期');
     if(parsed.length){
       allData=parsed;
