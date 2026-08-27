@@ -76,6 +76,39 @@
     font-size:13px;color:var(--muted);text-align:right;
   }
   .meta-range b{color:var(--text);font-weight:700;}
+  .sync-status{display:inline-block;margin-top:6px;font-size:11px;}
+  .sync-status.live{color:var(--mint);}
+  .sync-status.fallback{color:var(--gold);}
+
+  /* ---- Filters ---- */
+  .filters{
+    display:flex;flex-wrap:wrap;gap:18px;align-items:center;
+    background:var(--bg-panel);border:1px solid var(--line);
+    border-radius:10px;padding:14px 18px;margin-bottom:26px;
+    box-shadow:0 2px 10px rgba(20,20,30,.04);
+  }
+  .filter-group{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .filter-label{
+    font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);
+    letter-spacing:.05em;white-space:nowrap;
+  }
+  .chip-row{display:flex;flex-wrap:wrap;gap:6px;}
+  .chip{
+    font-family:'Noto Sans TC',sans-serif;font-size:12px;
+    padding:5px 12px;border-radius:20px;border:1px solid var(--line);
+    background:var(--bg-panel-2);color:var(--muted);cursor:pointer;
+    transition:all .15s ease;
+  }
+  .chip.active{
+    background:var(--flash);border-color:var(--flash);color:#fff;font-weight:500;
+  }
+  .chip:hover{border-color:var(--flash);}
+  .reset-btn{
+    margin-left:auto;font-family:'Noto Sans TC',sans-serif;font-size:12px;
+    padding:6px 14px;border-radius:20px;border:1px solid var(--line);
+    background:transparent;color:var(--muted);cursor:pointer;
+  }
+  .reset-btn:hover{color:var(--text);border-color:var(--text);}
 
   /* ---- KPI scoreboard ---- */
   .board{
@@ -176,9 +209,22 @@
     </div>
     <div class="meta-range">
       資料範圍：<b id="dateRange">—</b><br>
-      共 <b id="sessionCount">0</b> 場限搶紀錄
+      共 <b id="sessionCount">0</b> 場限搶紀錄<br>
+      <span id="syncStatus" class="sync-status">● 連線中…</span>
     </div>
   </header>
+
+  <div class="filters" id="filters">
+    <div class="filter-group">
+      <span class="filter-label">週幾</span>
+      <div class="chip-row" id="weekdayChips"></div>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">時段</span>
+      <div class="chip-row" id="slotChips"></div>
+    </div>
+    <button class="reset-btn" id="resetFilters">重設篩選</button>
+  </div>
 
   <div class="board" id="kpiBoard"></div>
 
@@ -256,8 +302,13 @@
 </div>
 
 <script>
-/* ---------------- Raw data (verbatim from source sheet) ---------------- */
-const raw = [
+/* ---------------- Live source config ---------------- */
+const SHEET_ID = '1Ux7v3IGiVEEYfxcVglEeGhfKWPkOBX7oU21WLYG8K3E';
+const GID = '0';
+const CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&gid=${GID}`;
+
+/* ---------------- Fallback snapshot (used only if the live sheet can't be reached) ---------------- */
+const fallbackRaw = [
 ["2025/7/2(三)","08:00-12:00",4,2360,"88",65772,0.485323,69750,51,0,135522,""],
 ["2025/7/21(一)","00:00-08:00",8,2360,"$88+3%",77349,0.434079,100842,68,2,178191,""],
 ["2025/7/31(三)","00:00-07:00",7,2360,"$88+3%",61522,0.335171,122032,70,3,183554,""],
@@ -287,15 +338,70 @@ const raw = [
 ["2026/6/4(四)","18:00-22:00",4,2410,"100+50",53998,0.61,34920,36,0,88918,""],
 ["2026/6/10(三)","18:00-22:00",4,2410,"100+50",59334,0.48611,56126,44,0,115460,"包套"],
 ["2026/7/6(一)","18:00-22:00",4,2410,"100",21476,0.64355,47148,25,0,60250,""],
-["2026/7/20(一)","18:00-22:00",4,2410,"100",38406,0.4376,29884,22,0,68290,"包套"]
+["2026/7/20(一)","18:00-22:00",4,2410,"100",38406,0.4376,29884,22,0,68290,"包套"],
+["2026/7/22(三)","14:00-18:00",4,2410,"100+50",49532,0.72651,131580,72,2,181112,"包套"],
+["2026/8/6(四)","14:00-18:00",4,2410,"100+88",63624,0.56582,82914,57,0,146538,"包套"]
 ];
 
-const data = raw.map(r => ({
-  date:r[0], timeSlot:r[1], hours:r[2], price:r[3], gift:r[4],
-  flashRevenue:r[5], flashRatio:r[6], nonFlashRevenue:r[7],
-  unitsSold:r[8], returns:r[9], totalRevenue:r[10], note:r[11],
-  startHour: parseInt(r[1].split(':')[0],10)
-}));
+/* ---------------- CSV parsing (for the live Google Sheet fetch) ---------------- */
+function parseCSVLine(line){
+  const out=[]; let cur=''; let inQ=false;
+  for(let i=0;i<line.length;i++){
+    const ch=line[i];
+    if(inQ){
+      if(ch==='"'){ if(line[i+1]==='"'){ cur+='"'; i++; } else { inQ=false; } }
+      else cur+=ch;
+    } else {
+      if(ch==='"') inQ=true;
+      else if(ch===','){ out.push(cur); cur=''; }
+      else cur+=ch;
+    }
+  }
+  out.push(cur);
+  return out;
+}
+function parseNumber(s){
+  if(s==null) return 0;
+  s = String(s).trim().replace(/,/g,'');
+  if(s==='') return 0;
+  if(s.endsWith('%')) return parseFloat(s)/100;
+  const n = parseFloat(s);
+  return isNaN(n) ? 0 : n;
+}
+function parseSheetCSV(text){
+  const lines = text.split(/\r?\n/).filter(l=>l.trim()!=='');
+  const rows = [];
+  for(let i=1;i<lines.length;i++){ // skip header row
+    const cols = parseCSVLine(lines[i]);
+    const date = (cols[0]||'').trim();
+    if(!/^\d{4}\//.test(date)) continue; // skip blank/invalid trailing rows
+    rows.push([
+      date, (cols[1]||'').trim(), parseNumber(cols[2]), parseNumber(cols[3]),
+      (cols[4]||'').trim(), parseNumber(cols[5]), parseNumber(cols[6]), parseNumber(cols[7]),
+      parseNumber(cols[8]), parseNumber(cols[9]), parseNumber(cols[10]), (cols[11]||'').trim()
+    ]);
+  }
+  return rows;
+}
+async function loadRaw(){
+  try{
+    const res = await fetch(CSV_URL, {cache:'no-store'});
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const text = await res.text();
+    const rows = parseSheetCSV(text);
+    if(rows.length===0) throw new Error('讀不到有效資料列');
+    return {rows, live:true};
+  }catch(err){
+    console.warn('無法讀取即時 Google Sheet，改用內建備份資料：', err);
+    return {rows:fallbackRaw, live:false};
+  }
+}
+function updateSyncStatus(live){
+  const el = document.getElementById('syncStatus');
+  const t = new Date().toLocaleString('zh-Hant-TW',{hour12:false});
+  if(live){ el.className='sync-status live'; el.textContent='● 即時同步 Google Sheet · '+t; }
+  else { el.className='sync-status fallback'; el.textContent='● 無法連線 Google Sheet，顯示內建備份資料 · '+t; }
+}
 
 /* ---------------- Helpers ---------------- */
 const fmt = n => Math.round(n).toLocaleString('zh-Hant-TW');
@@ -311,6 +417,7 @@ function slotBucket(h){
   if(h===22) return '深夜 22–24';
   return '其他';
 }
+const SLOT_ORDER = ['凌晨 00–07/08','上午 07–12','中午 11–14','下午 14–18','晚間 18–22','深夜 22–24','其他'];
 function giftBucket(g){
   const hasCash = /\$|^\d/.test(g);
   const hasItem = /[\u4e00-\u9fa5]/.test(g);
@@ -318,52 +425,27 @@ function giftBucket(g){
   if(hasItem) return '實體贈品';
   return '現金折抵';
 }
-
-/* ---------------- KPIs ---------------- */
-const totalRevenues = data.map(d=>d.totalRevenue);
-const flashRatios = data.map(d=>d.flashRatio);
-const returnRates = data.map(d=>d.returns/d.unitsSold);
-const bestSession = data.reduce((a,b)=>b.totalRevenue>a.totalRevenue?b:a);
-const worstSession = data.reduce((a,b)=>b.totalRevenue<a.totalRevenue?b:a);
-
-// best slot / duration / price by avg totalRevenue
-function groupAvg(keyFn){
-  const m = {};
-  data.forEach(d=>{
-    const k = keyFn(d);
-    (m[k] = m[k]||[]).push(d.totalRevenue);
-  });
-  return Object.entries(m).map(([k,v])=>[k,avg(v),v.length]).sort((a,b)=>b[1]-a[1]);
+function weekdayOf(dateStr){
+  const m = dateStr.match(/\(([一二三四五六日])\)/);
+  return m ? m[1] : '';
 }
-const bySlot = groupAvg(d=>slotBucket(d.startHour));
-const byDuration = groupAvg(d=>d.hours+' 小時');
-const byPrice = groupAvg(d=>'$'+d.price);
-const byGift = groupAvg(d=>giftBucket(d.gift));
+const WEEKDAY_ORDER = ['一','二','三','四','五','六','日'];
 
-document.getElementById('sessionCount').textContent = data.length;
-document.getElementById('dateRange').textContent = data[0].date.split('(')[0] + ' ~ ' + data[data.length-1].date.split('(')[0];
-
-const kpis = [
-  {label:'平均全日進價', value:fmt(avg(totalRevenues)), sub:`共 ${data.length} 場`, cls:'flash'},
-  {label:'平均限搶時段占比', value:pct(avg(flashRatios)), sub:'限搶時段／全日進價', cls:'mint'},
-  {label:'平均退貨率', value:pct(avg(returnRates)), sub:'退貨組數／銷售組數', cls:''},
-  {label:'最佳單場', value:fmt(bestSession.totalRevenue), sub:bestSession.date+' · '+bestSession.timeSlot, cls:'gold'},
-  {label:'最佳時段', value:bySlot[0][0], sub:'平均 '+fmt(bySlot[0][1])+' 元', cls:'mint'},
-  {label:'最佳金額帶', value:byPrice[0][0], sub:'平均 '+fmt(byPrice[0][1])+' 元', cls:'flash'},
-];
-document.getElementById('kpiBoard').innerHTML = kpis.map(k=>`
-  <div class="cell">
-    <div class="label">${k.label}</div>
-    <div class="value ${k.cls}">${k.value}</div>
-    <div class="sub">${k.sub}</div>
-  </div>`).join('');
+function buildData(rawRows){
+  return rawRows.map(r=>({
+    date:r[0], timeSlot:r[1], hours:r[2], price:r[3], gift:r[4],
+    flashRevenue:r[5], flashRatio:r[6], nonFlashRevenue:r[7],
+    unitsSold:r[8], returns:r[9], totalRevenue:r[10], note:r[11],
+    startHour: parseInt(r[1].split(':')[0],10),
+    weekday: weekdayOf(r[0])
+  }));
+}
 
 /* ---------------- Chart theme ---------------- */
 Chart.defaults.color = '#6a6f7a';
 Chart.defaults.font.family = "'JetBrains Mono', monospace";
 Chart.defaults.borderColor = '#e2e0da';
 const FLASH='#e14b26', MINT='#0e8f80', GOLD='#b8790a', BAD='#c93a63', TEXT='#1b1d22';
-
 function tip(){
   return {
     backgroundColor:'#1b1d22', titleColor:'#ffffff', bodyColor:'#dcdde0',
@@ -373,117 +455,200 @@ function tip(){
   };
 }
 
-/* Trend chart */
-new Chart(document.getElementById('trendChart'), {
-  type:'line',
-  data:{
-    labels:data.map(d=>d.date.split('(')[0]),
-    datasets:[{
-      label:'全日進價',
-      data:data.map(d=>d.totalRevenue),
-      borderColor:FLASH, backgroundColor:'rgba(225,75,38,.10)',
-      pointBackgroundColor:data.map(d=> d===bestSession?GOLD : d===worstSession?BAD : FLASH),
-      pointRadius:data.map(d=> (d===bestSession||d===worstSession)?5:2.5),
-      tension:.25, fill:true, borderWidth:2
-    }]
-  },
-  options:{
-    plugins:{legend:{display:false}, tooltip:tip()},
-    scales:{
-      x:{ticks:{maxRotation:60,minRotation:60,autoSkip:true,maxTicksLimit:15}, grid:{display:false}},
-      y:{grid:{color:'#eeece7'}, ticks:{callback:v=>(v/1000)+'k'}}
-    }
-  }
-});
-
-/* Slot chart (bar + line) */
-new Chart(document.getElementById('slotChart'), {
-  data:{
-    labels:bySlot.map(s=>s[0]),
-    datasets:[
-      {type:'bar', label:'平均全日進價', data:bySlot.map(s=>s[1]), backgroundColor:'rgba(225,75,38,.75)', borderRadius:4, order:2, yAxisID:'y'},
-    ]
-  },
-  options:{
-    plugins:{legend:{display:false}, tooltip:tip()},
-    scales:{
-      x:{grid:{display:false}},
-      y:{grid:{color:'#eeece7'}, ticks:{callback:v=>(v/1000)+'k'}}
-    }
-  }
-});
-
-/* Duration chart */
-new Chart(document.getElementById('durationChart'), {
-  type:'bar',
-  data:{
-    labels:byDuration.sort((a,b)=>parseInt(a[0])-parseInt(b[0])).map(s=>s[0]),
-    datasets:[{
-      label:'平均全日進價',
-      data:byDuration.sort((a,b)=>parseInt(a[0])-parseInt(b[0])).map(s=>s[1]),
-      backgroundColor:'rgba(14,143,128,.70)', borderRadius:4
-    }]
-  },
-  options:{
-    plugins:{legend:{display:false}, tooltip:tip()},
-    scales:{x:{grid:{display:false}}, y:{grid:{color:'#eeece7'}, ticks:{callback:v=>(v/1000)+'k'}}}
-  }
-});
-
-/* Price chart: revenue vs return rate */
-const priceGroups = {};
-data.forEach(d=>{
-  const k = '$'+d.price;
-  priceGroups[k] = priceGroups[k] || {rev:[], ret:[]};
-  priceGroups[k].rev.push(d.totalRevenue);
-  priceGroups[k].ret.push(d.returns/d.unitsSold);
-});
-const priceLabels = Object.keys(priceGroups).sort();
-new Chart(document.getElementById('priceChart'), {
-  data:{
-    labels:priceLabels,
-    datasets:[
-      {type:'bar', label:'平均全日進價', data:priceLabels.map(k=>avg(priceGroups[k].rev)), backgroundColor:'rgba(184,121,10,.75)', borderRadius:4, yAxisID:'y'},
-      {type:'line', label:'平均退貨率', data:priceLabels.map(k=>avg(priceGroups[k].ret)*100), borderColor:BAD, backgroundColor:BAD, yAxisID:'y1', tension:.3}
-    ]
-  },
-  options:{
-    plugins:{legend:{labels:{font:{family:"'Noto Sans TC',sans-serif",size:11}}}, tooltip:tip()},
-    scales:{
-      x:{grid:{display:false}},
-      y:{position:'left', grid:{color:'#eeece7'}, ticks:{callback:v=>(v/1000)+'k'}},
-      y1:{position:'right', grid:{display:false}, ticks:{callback:v=>v+'%'}}
-    }
-  }
-});
-
-/* Gift chart */
-const giftGroups = {};
-data.forEach(d=>{
-  const k = giftBucket(d.gift);
-  (giftGroups[k]=giftGroups[k]||[]).push(d.totalRevenue);
-});
-new Chart(document.getElementById('giftChart'), {
-  type:'bar',
-  data:{
-    labels:Object.keys(giftGroups),
-    datasets:[{
-      label:'平均全日進價',
-      data:Object.keys(giftGroups).map(k=>avg(giftGroups[k])),
-      backgroundColor:['rgba(225,75,38,.75)','rgba(14,143,128,.75)','rgba(184,121,10,.75)'],
-      borderRadius:4
-    }]
-  },
-  options:{
-    plugins:{legend:{display:false}, tooltip:tip()},
-    scales:{x:{grid:{display:false}}, y:{grid:{color:'#eeece7'}, ticks:{callback:v=>(v/1000)+'k'}}}
-  }
-});
-
-/* ---------------- Table ---------------- */
+/* ---------------- State ---------------- */
+let allData = [];
+let activeWeekdays = new Set(WEEKDAY_ORDER);
+let activeSlots = new Set();
+let charts = {};
 let sortKey='date', sortDir=1;
-function renderTable(){
-  const rows = [...data].sort((a,b)=>{
+let bestSession=null, worstSession=null;
+
+function getFilteredData(){
+  return allData.filter(d => activeWeekdays.has(d.weekday) && activeSlots.has(slotBucket(d.startHour)));
+}
+
+/* ---------------- Filter chips ---------------- */
+function renderFilterChips(){
+  const wkWrap = document.getElementById('weekdayChips');
+  wkWrap.innerHTML = WEEKDAY_ORDER.map(w=>`<button class="chip active" data-wd="${w}">週${w}</button>`).join('');
+  wkWrap.querySelectorAll('.chip').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const w = btn.dataset.wd;
+      if(activeWeekdays.has(w)){ activeWeekdays.delete(w); btn.classList.remove('active'); }
+      else { activeWeekdays.add(w); btn.classList.add('active'); }
+      renderDashboard(getFilteredData());
+    });
+  });
+
+  const slots = SLOT_ORDER.filter(s => allData.some(d=>slotBucket(d.startHour)===s));
+  activeSlots = new Set(slots);
+  const slotWrap = document.getElementById('slotChips');
+  slotWrap.innerHTML = slots.map(s=>`<button class="chip active" data-slot="${s}">${s}</button>`).join('');
+  slotWrap.querySelectorAll('.chip').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const s = btn.dataset.slot;
+      if(activeSlots.has(s)){ activeSlots.delete(s); btn.classList.remove('active'); }
+      else { activeSlots.add(s); btn.classList.add('active'); }
+      renderDashboard(getFilteredData());
+    });
+  });
+
+  document.getElementById('resetFilters').addEventListener('click', ()=>{
+    activeWeekdays = new Set(WEEKDAY_ORDER);
+    document.querySelectorAll('#weekdayChips .chip').forEach(b=>b.classList.add('active'));
+    activeSlots = new Set(slots);
+    document.querySelectorAll('#slotChips .chip').forEach(b=>b.classList.add('active'));
+    renderDashboard(getFilteredData());
+  });
+}
+
+/* ---------------- Render pipeline ---------------- */
+function renderDashboard(subset){
+  document.getElementById('sessionCount').textContent = subset.length;
+
+  if(subset.length===0){
+    document.getElementById('dateRange').textContent = '—';
+    document.getElementById('kpiBoard').innerHTML = '<div class="cell"><div class="label">目前篩選無資料</div><div class="value">—</div></div>';
+    Object.values(charts).forEach(c=>c && c.destroy());
+    charts = {};
+    document.getElementById('tableBody').innerHTML = '<tr><td colspan="12" style="text-align:center;color:var(--muted);padding:24px;">篩選條件下沒有符合的場次</td></tr>';
+    return;
+  }
+
+  const sorted = [...subset].sort((a,b)=> new Date(a.date.split('(')[0]) - new Date(b.date.split('(')[0]));
+  document.getElementById('dateRange').textContent = sorted[0].date.split('(')[0] + ' ~ ' + sorted[sorted.length-1].date.split('(')[0];
+
+  const totalRevenues = subset.map(d=>d.totalRevenue);
+  const flashRatios = subset.map(d=>d.flashRatio);
+  const returnRates = subset.map(d=>d.returns/d.unitsSold);
+  bestSession = subset.reduce((a,b)=>b.totalRevenue>a.totalRevenue?b:a);
+  worstSession = subset.reduce((a,b)=>b.totalRevenue<a.totalRevenue?b:a);
+
+  function groupAvg(keyFn){
+    const m = {};
+    subset.forEach(d=>{ const k=keyFn(d); (m[k]=m[k]||[]).push(d.totalRevenue); });
+    return Object.entries(m).map(([k,v])=>[k,avg(v),v.length]).sort((a,b)=>b[1]-a[1]);
+  }
+  const bySlot = groupAvg(d=>slotBucket(d.startHour));
+  const byDuration = groupAvg(d=>d.hours+' 小時');
+  const byPrice = groupAvg(d=>'$'+d.price);
+
+  const kpis = [
+    {label:'平均全日進價', value:fmt(avg(totalRevenues)), sub:`共 ${subset.length} 場`, cls:'flash'},
+    {label:'平均限搶時段占比', value:pct(avg(flashRatios)), sub:'限搶時段／全日進價', cls:'mint'},
+    {label:'平均退貨率', value:pct(avg(returnRates)), sub:'退貨組數／銷售組數', cls:''},
+    {label:'最佳單場', value:fmt(bestSession.totalRevenue), sub:bestSession.date+' · '+bestSession.timeSlot, cls:'gold'},
+    {label:'最佳時段', value:bySlot[0][0], sub:'平均 '+fmt(bySlot[0][1])+' 元', cls:'mint'},
+    {label:'最佳金額帶', value:byPrice[0][0], sub:'平均 '+fmt(byPrice[0][1])+' 元', cls:'flash'},
+  ];
+  document.getElementById('kpiBoard').innerHTML = kpis.map(k=>`
+    <div class="cell">
+      <div class="label">${k.label}</div>
+      <div class="value ${k.cls}">${k.value}</div>
+      <div class="sub">${k.sub}</div>
+    </div>`).join('');
+
+  renderCharts(subset, sorted, bySlot, byDuration, byPrice);
+  renderTable(subset);
+}
+
+function renderCharts(subset, sorted, bySlot, byDuration, byPrice){
+  Object.values(charts).forEach(c=>c && c.destroy());
+  charts = {};
+
+  charts.trend = new Chart(document.getElementById('trendChart'), {
+    type:'line',
+    data:{
+      labels:sorted.map(d=>d.date.split('(')[0]),
+      datasets:[{
+        label:'全日進價',
+        data:sorted.map(d=>d.totalRevenue),
+        borderColor:FLASH, backgroundColor:'rgba(225,75,38,.10)',
+        pointBackgroundColor:sorted.map(d=> d===bestSession?GOLD : d===worstSession?BAD : FLASH),
+        pointRadius:sorted.map(d=> (d===bestSession||d===worstSession)?5:2.5),
+        tension:.25, fill:true, borderWidth:2
+      }]
+    },
+    options:{
+      plugins:{legend:{display:false}, tooltip:tip()},
+      scales:{
+        x:{ticks:{maxRotation:60,minRotation:60,autoSkip:true,maxTicksLimit:15}, grid:{display:false}},
+        y:{grid:{color:'#eeece7'}, ticks:{callback:v=>(v/1000)+'k'}}
+      }
+    }
+  });
+
+  charts.slot = new Chart(document.getElementById('slotChart'), {
+    data:{
+      labels:bySlot.map(s=>s[0]),
+      datasets:[{type:'bar', label:'平均全日進價', data:bySlot.map(s=>s[1]), backgroundColor:'rgba(225,75,38,.75)', borderRadius:4, order:2, yAxisID:'y'}]
+    },
+    options:{
+      plugins:{legend:{display:false}, tooltip:tip()},
+      scales:{x:{grid:{display:false}}, y:{grid:{color:'#eeece7'}, ticks:{callback:v=>(v/1000)+'k'}}}
+    }
+  });
+
+  const durationSorted = [...byDuration].sort((a,b)=>parseInt(a[0])-parseInt(b[0]));
+  charts.duration = new Chart(document.getElementById('durationChart'), {
+    type:'bar',
+    data:{
+      labels:durationSorted.map(s=>s[0]),
+      datasets:[{label:'平均全日進價', data:durationSorted.map(s=>s[1]), backgroundColor:'rgba(14,143,128,.70)', borderRadius:4}]
+    },
+    options:{
+      plugins:{legend:{display:false}, tooltip:tip()},
+      scales:{x:{grid:{display:false}}, y:{grid:{color:'#eeece7'}, ticks:{callback:v=>(v/1000)+'k'}}}
+    }
+  });
+
+  const priceGroups = {};
+  subset.forEach(d=>{
+    const k = '$'+d.price;
+    priceGroups[k] = priceGroups[k] || {rev:[], ret:[]};
+    priceGroups[k].rev.push(d.totalRevenue);
+    priceGroups[k].ret.push(d.returns/d.unitsSold);
+  });
+  const priceLabels = Object.keys(priceGroups).sort();
+  charts.price = new Chart(document.getElementById('priceChart'), {
+    data:{
+      labels:priceLabels,
+      datasets:[
+        {type:'bar', label:'平均全日進價', data:priceLabels.map(k=>avg(priceGroups[k].rev)), backgroundColor:'rgba(184,121,10,.75)', borderRadius:4, yAxisID:'y'},
+        {type:'line', label:'平均退貨率', data:priceLabels.map(k=>avg(priceGroups[k].ret)*100), borderColor:BAD, backgroundColor:BAD, yAxisID:'y1', tension:.3}
+      ]
+    },
+    options:{
+      plugins:{legend:{labels:{font:{family:"'Noto Sans TC',sans-serif",size:11}}}, tooltip:tip()},
+      scales:{
+        x:{grid:{display:false}},
+        y:{position:'left', grid:{color:'#eeece7'}, ticks:{callback:v=>(v/1000)+'k'}},
+        y1:{position:'right', grid:{display:false}, ticks:{callback:v=>v+'%'}}
+      }
+    }
+  });
+
+  const giftGroups = {};
+  subset.forEach(d=>{ const k=giftBucket(d.gift); (giftGroups[k]=giftGroups[k]||[]).push(d.totalRevenue); });
+  charts.gift = new Chart(document.getElementById('giftChart'), {
+    type:'bar',
+    data:{
+      labels:Object.keys(giftGroups),
+      datasets:[{
+        label:'平均全日進價', data:Object.keys(giftGroups).map(k=>avg(giftGroups[k])),
+        backgroundColor:['rgba(225,75,38,.75)','rgba(14,143,128,.75)','rgba(184,121,10,.75)'],
+        borderRadius:4
+      }]
+    },
+    options:{
+      plugins:{legend:{display:false}, tooltip:tip()},
+      scales:{x:{grid:{display:false}}, y:{grid:{color:'#eeece7'}, ticks:{callback:v=>(v/1000)+'k'}}}
+    }
+  });
+}
+
+function renderTable(subset){
+  const rows = [...subset].sort((a,b)=>{
     let av=a[sortKey], bv=b[sortKey];
     if(sortKey==='date'){ av=new Date(a.date.split('(')[0]); bv=new Date(b.date.split('(')[0]); }
     if(av<bv) return -1*sortDir;
@@ -514,10 +679,18 @@ document.querySelectorAll('#dataTable thead th').forEach(th=>{
     if(sortKey===key){ sortDir*=-1; } else { sortKey=key; sortDir=1; }
     document.querySelectorAll('#dataTable thead th .arrow').forEach(a=>a.textContent='');
     th.querySelector('.arrow').textContent = sortDir===1?'▲':'▼';
-    renderTable();
+    renderTable(getFilteredData());
   });
 });
-renderTable();
+
+/* ---------------- Init ---------------- */
+(async function init(){
+  const {rows, live} = await loadRaw();
+  allData = buildData(rows);
+  renderFilterChips();
+  updateSyncStatus(live);
+  renderDashboard(getFilteredData());
+})();
 </script>
 </body>
 </html>
