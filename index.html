@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>益生菌 MOMO 限搶戰情板</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=JetBrains+Mono:wght@400;500;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#f5f4f1;
+    --bg-panel:#ffffff;
+    --bg-panel-2:#f0eeea;
+    --line:#e2e0da;
+    --text:#1b1d22;
+    --muted:#6a6f7a;
+    --flash:#e14b26;
+    --flash-dim:#fbdccb;
+    --mint:#0e8f80;
+    --gold:#b8790a;
+    --bad:#c93a63;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(1200px 600px at 15% -10%, rgba(225,75,38,.07), transparent 60%),
+      radial-gradient(900px 500px at 100% 0%, rgba(14,143,128,.06), transparent 55%),
+      var(--bg);
+    color:var(--text);
+    font-family:'Noto Sans TC',sans-serif;
+    min-height:100vh;
+    padding:28px 20px 60px;
+  }
+  .wrap{max-width:1180px;margin:0 auto;}
+
+  /* ---- Header / scoreboard ---- */
+  header{
+    display:flex;flex-wrap:wrap;gap:20px;justify-content:space-between;align-items:flex-end;
+    border-bottom:1px solid var(--line);
+    padding-bottom:20px;margin-bottom:26px;
+  }
+  .brand-eyebrow{
+    font-family:'JetBrains Mono',monospace;
+    font-size:12px;letter-spacing:.18em;color:var(--flash);
+    text-transform:uppercase;margin:0 0 8px;
+    display:flex;align-items:center;gap:8px;
+  }
+  .brand-eyebrow::before{
+    content:'';width:7px;height:7px;border-radius:50%;
+    background:var(--flash);box-shadow:0 0 0 3px var(--flash-dim);
+    animation:pulse 1.6s infinite ease-in-out;
+  }
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+  h1{margin:0;font-size:27px;font-weight:900;letter-spacing:.01em;}
+  .subtitle{color:var(--muted);font-size:13px;margin-top:6px;}
+  .meta-range{
+    font-family:'JetBrains Mono',monospace;
+    font-size:13px;color:var(--muted);text-align:right;
+  }
+  .meta-range b{color:var(--text);font-weight:700;}
+
+  /* ---- KPI scoreboard ---- */
+  .board{
+    display:grid;grid-template-columns:repeat(6,1fr);
+    gap:1px;background:var(--line);
+    border:1px solid var(--line);border-radius:10px;
+    overflow:hidden;margin-bottom:30px;
+  }
+  .cell{
+    background:var(--bg-panel);
+    padding:18px 14px;
+    display:flex;flex-direction:column;gap:6px;
+    min-width:0;
+    box-shadow:0 1px 2px rgba(20,20,30,.03);
+  }
+  .cell .label{
+    font-size:11px;color:var(--muted);letter-spacing:.06em;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .cell .value{
+    font-family:'JetBrains Mono',monospace;font-weight:800;
+    font-size:22px;line-height:1.15;color:var(--text);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .cell .value.flash{color:var(--flash);}
+  .cell .value.mint{color:var(--mint);}
+  .cell .value.gold{color:var(--gold);}
+  .cell .sub{font-size:11px;color:var(--muted);}
+
+  /* ---- Section ---- */
+  .section-title{
+    display:flex;align-items:baseline;gap:10px;margin:36px 0 14px;
+  }
+  .section-title .tag{
+    font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--flash);
+    border:1px solid var(--flash-dim);padding:2px 8px;border-radius:20px;
+  }
+  .section-title h2{font-size:17px;margin:0;font-weight:700;}
+  .section-title p{margin:2px 0 0;color:var(--muted);font-size:12.5px;}
+
+  .grid2{display:grid;grid-template-columns:1.4fr 1fr;gap:16px;}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;}
+  .panel{
+    background:var(--bg-panel);border:1px solid var(--line);
+    border-radius:10px;padding:18px;
+    box-shadow:0 2px 10px rgba(20,20,30,.04);
+  }
+  .panel h3{margin:0 0 4px;font-size:13.5px;font-weight:700;}
+  .panel .hint{font-size:11.5px;color:var(--muted);margin:0 0 12px;}
+  .chart-box{position:relative;height:260px;}
+  .chart-box.tall{height:300px;}
+
+  /* ---- Table ---- */
+  .table-panel{background:var(--bg-panel);border:1px solid var(--line);border-radius:10px;overflow:hidden;box-shadow:0 2px 10px rgba(20,20,30,.04);}
+  .table-scroll{overflow-x:auto;}
+  table{width:100%;border-collapse:collapse;font-size:12.5px;min-width:920px;}
+  thead th{
+    position:sticky;top:0;background:var(--bg-panel-2);
+    text-align:left;padding:10px 12px;font-weight:700;
+    border-bottom:1px solid var(--line);cursor:pointer;user-select:none;
+    white-space:nowrap;color:var(--muted);
+  }
+  thead th:hover{color:var(--text);}
+  thead th .arrow{font-size:10px;margin-left:3px;color:var(--flash);}
+  tbody td{
+    padding:9px 12px;border-bottom:1px solid var(--line);
+    font-family:'JetBrains Mono',monospace;white-space:nowrap;
+  }
+  tbody td.wrap-cell{font-family:'Noto Sans TC',sans-serif;white-space:normal;}
+  tbody tr:hover{background:var(--bg-panel-2);}
+  .pill{
+    display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;
+    font-family:'Noto Sans TC',sans-serif;
+  }
+  .pill.best{background:rgba(14,143,128,.12);color:var(--mint);}
+  .pill.worst{background:rgba(201,58,99,.12);color:var(--bad);}
+  .note-flag{color:var(--flash);font-size:11px;}
+
+  footer{margin-top:36px;color:var(--muted);font-size:11.5px;text-align:center;}
+
+  @media (max-width:900px){
+    .board{grid-template-columns:repeat(3,1fr);}
+    .grid2,.grid3{grid-template-columns:1fr;}
+  }
+  @media (max-width:520px){
+    .board{grid-template-columns:repeat(2,1fr);}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div>
+      <p class="brand-eyebrow">LIVE · MOMO FLASH SALE OPS</p>
+      <h1>益生菌限搶戰情板</h1>
+      <p class="subtitle">益生菌限搶數據 · 逐場拆解時段、金額、贈品與轉換表現</p>
+    </div>
+    <div class="meta-range">
+      資料範圍：<b id="dateRange">—</b><br>
+      共 <b id="sessionCount">0</b> 場限搶紀錄
+    </div>
+  </header>
+
+  <div class="board" id="kpiBoard"></div>
+
+  <div class="section-title">
+    <span class="tag">TREND</span>
+    <div><h2>全日進價走勢</h2><p>每場限搶當日總進價（限搶時段＋非限搶時段），依時間排序</p></div>
+  </div>
+  <div class="panel">
+    <div class="chart-box tall"><canvas id="trendChart"></canvas></div>
+  </div>
+
+  <div class="section-title">
+    <span class="tag">BREAKDOWN</span>
+    <div><h2>時段與時數表現</h2><p>依限搶開始時段、限搶時數分組的平均全日進價與限搶佔比</p></div>
+  </div>
+  <div class="grid2">
+    <div class="panel">
+      <h3>依限搶時段分組</h3>
+      <p class="hint">平均全日進價（長條）與平均限搶時段銷售占比（折線）</p>
+      <div class="chart-box"><canvas id="slotChart"></canvas></div>
+    </div>
+    <div class="panel">
+      <h3>依限搶時數分組</h3>
+      <p class="hint">平均全日進價，依 2 / 3 / 4 / 7 / 8 小時分組</p>
+      <div class="chart-box"><canvas id="durationChart"></canvas></div>
+    </div>
+  </div>
+
+  <div class="section-title">
+    <span class="tag">PRICING</span>
+    <div><h2>限搶金額與贈品組合</h2><p>不同價格帶、贈品類型對進價與退貨率的影響</p></div>
+  </div>
+  <div class="grid2">
+    <div class="panel">
+      <h3>依限搶金額分組</h3>
+      <p class="hint">平均全日進價 vs 平均退貨組數占比</p>
+      <div class="chart-box"><canvas id="priceChart"></canvas></div>
+    </div>
+    <div class="panel">
+      <h3>依贈品類型分組</h3>
+      <p class="hint">現金折抵 / 實體贈品 / 現金＋贈品混合，平均全日進價</p>
+      <div class="chart-box"><canvas id="giftChart"></canvas></div>
+    </div>
+  </div>
+
+  <div class="section-title">
+    <span class="tag">RAW DATA</span>
+    <div><h2>原始場次紀錄</h2><p>點擊欄位標題可排序；表現最佳／最差場次已標記</p></div>
+  </div>
+  <div class="table-panel">
+    <div class="table-scroll">
+      <table id="dataTable">
+        <thead>
+          <tr>
+            <th data-key="date">日期<span class="arrow"></span></th>
+            <th data-key="timeSlot">時段</th>
+            <th data-key="hours">時數</th>
+            <th data-key="price">金額</th>
+            <th data-key="gift">贈品</th>
+            <th data-key="flashRevenue">限搶進價</th>
+            <th data-key="flashRatio">限搶占比</th>
+            <th data-key="nonFlashRevenue">非限搶進價</th>
+            <th data-key="unitsSold">銷售組數</th>
+            <th data-key="returns">退貨組數</th>
+            <th data-key="totalRevenue">全日進價</th>
+            <th data-key="note">備註</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <footer>資料來源：益生菌限搶數據（Google 試算表原始資料）· 儀表板依原始資料自動計算，不含任何推估數值</footer>
+</div>
+
+<script>
+/* ---------------- Raw data (verbatim from source sheet) ---------------- */
+const raw = [
+["2025/7/2(三)","08:00-12:00",4,2360,"88",65772,0.485323,69750,51,0,135522,""],
+["2025/7/21(一)","00:00-08:00",8,2360,"$88+3%",77349,0.434079,100842,68,2,178191,""],
+["2025/7/31(三)","00:00-07:00",7,2360,"$88+3%",61522,0.335171,122032,70,3,183554,""],
+["2025/8/7(四)","18:00-22:00",4,2360,"$88+3%",78683,0.532776,69002,52,1,147685,""],
+["2025/8/13(三)","07:00-11:00",4,2360,"收納袋",50881,0.46319,58968,48,1,109849,""],
+["2025/8/20(三)","22:00-24:00",2,2360,"50",43098,0.451137,52434,34,1,95532,""],
+["2025/8/31(日)","07:00-11:00",4,2360,"行李秤",35837,0.227381,121771,59,1,157608,""],
+["2025/9/3(三)","18:00-22:00",4,2360,"行李秤",30583,0.454624,36688,20,4,67271,""],
+["2025/9/4(四)","11:00-14:00",3,2360,"50",53862,0.50121,53602,37,0,107464,""],
+["2025/9/12(五)","14:00-18:00",4,2360,"50",50436,0.389913,78916,55,0,129352,""],
+["2025/9/21(日)","00:00-07:00",7,2360,"行李秤",39422,0.341207,76115,32,0,115537,""],
+["2025/10/11(六)","11:00-14:00",3,2360,"50",36461,0.450464,44480,21,0,80941,"包套"],
+["2025/10/14(二)","00:00-07:00",7,2360,"行李秤",22109,0.249138,66633,28,0,88742,""],
+["2025/10/27(一)","18:00-22:00",4,2290,"指甲剪",58273,0.636669,33255,31,1,91528,""],
+["2025/11/3(一)","00:00-07:00",7,2290,"指甲剪",39628,0.232727,130649,71,5,170277,"包套"],
+["2025/11/8(六)","18:00-22:00",4,2290,"$100+指甲剪",77841,0.453122,93947,60,1,171788,""],
+["2025/11/19(三)","00:00-07:00",7,2360,"$50+指甲剪",24348,0.375578,40480,21,1,64828,""],
+["2025/11/27(四)","00:00-07:00",7,2290,"指甲剪",24072,0.26992,65110,35,0,89182,""],
+["2025/12/4(四)","22:00-24:00",2,2290,"指甲剪",27512,0.332427,55249,24,1,82761,"包套"],
+["2026/2/10(二)","00:00-07:00",7,2410,"$50+$50",48679,0.33672,95889,45,0,144568,"包套"],
+["2026/3/13(五)","07:00-11:00",4,2410,"$100+指甲剪",71032,0.527809,63547,53,6,134579,""],
+["2026/3/19(四)","00:00-07:00",7,2410,"$100+指甲剪",28056,0.24267,87558,44,5,115614,"補3"],
+["2026/4/4(六)","14:00-18:00",4,2410,"100",119942,0.435175,155676,111,4,275618,"包套/MOMOLINE曝光"],
+["2026/4/17(五)","14:00-18:00",4,2410,"100",52964,0.587718,37154,33,1,90118,"廣告壞掉"],
+["2026/4/27(一)","18:00-22:00",4,2410,"100",52404,0.581311,37744,29,0,90148,"LINE桌機(曝光型)"],
+["2026/5/10(日)","14:00-18:00",4,2410,"100",89170,0.384135,142962,78,1,232132,"包套/MOMOLINE曝光"],
+["2026/6/4(四)","18:00-22:00",4,2410,"100+50",53998,0.61,34920,36,0,88918,""],
+["2026/6/10(三)","18:00-22:00",4,2410,"100+50",59334,0.48611,56126,44,0,115460,"包套"],
+["2026/7/6(一)","18:00-22:00",4,2410,"100",21476,0.64355,47148,25,0,60250,""],
+["2026/7/20(一)","18:00-22:00",4,2410,"100",38406,0.4376,29884,22,0,68290,"包套"]
+];
+
+const data = raw.map(r => ({
+  date:r[0], timeSlot:r[1], hours:r[2], price:r[3], gift:r[4],
+  flashRevenue:r[5], flashRatio:r[6], nonFlashRevenue:r[7],
+  unitsSold:r[8], returns:r[9], totalRevenue:r[10], note:r[11],
+  startHour: parseInt(r[1].split(':')[0],10)
+}));
+
+/* ---------------- Helpers ---------------- */
+const fmt = n => Math.round(n).toLocaleString('zh-Hant-TW');
+const pct = n => (n*100).toFixed(1)+'%';
+const avg = arr => arr.reduce((a,b)=>a+b,0)/arr.length;
+
+function slotBucket(h){
+  if(h===0) return '凌晨 00–07/08';
+  if(h===7 || h===8) return '上午 07–12';
+  if(h===11) return '中午 11–14';
+  if(h===14) return '下午 14–18';
+  if(h===18) return '晚間 18–22';
+  if(h===22) return '深夜 22–24';
+  return '其他';
+}
+function giftBucket(g){
+  const hasCash = /\$|^\d/.test(g);
+  const hasItem = /[\u4e00-\u9fa5]/.test(g);
+  if(hasCash && hasItem) return '現金＋贈品';
+  if(hasItem) return '實體贈品';
+  return '現金折抵';
+}
+
+/* ---------------- KPIs ---------------- */
+const totalRevenues = data.map(d=>d.totalRevenue);
+const flashRatios = data.map(d=>d.flashRatio);
+const returnRates = data.map(d=>d.returns/d.unitsSold);
+const bestSession = data.reduce((a,b)=>b.totalRevenue>a.totalRevenue?b:a);
+const worstSession = data.reduce((a,b)=>b.totalRevenue<a.totalRevenue?b:a);
+
+// best slot / duration / price by avg totalRevenue
+function groupAvg(keyFn){
+  const m = {};
+  data.forEach(d=>{
+    const k = keyFn(d);
+    (m[k] = m[k]||[]).push(d.totalRevenue);
+  });
+  return Object.entries(m).map(([k,v])=>[k,avg(v),v.length]).sort((a,b)=>b[1]-a[1]);
+}
+const bySlot = groupAvg(d=>slotBucket(d.startHour));
+const byDuration = groupAvg(d=>d.hours+' 小時');
+const byPrice = groupAvg(d=>'$'+d.price);
+const byGift = groupAvg(d=>giftBucket(d.gift));
+
+document.getElementById('sessionCount').textContent = data.length;
+document.getElementById('dateRange').textContent = data[0].date.split('(')[0] + ' ~ ' + data[data.length-1].date.split('(')[0];
+
+const kpis = [
+  {label:'平均全日進價', value:fmt(avg(totalRevenues)), sub:`共 ${data.length} 場`, cls:'flash'},
+  {label:'平均限搶時段占比', value:pct(avg(flashRatios)), sub:'限搶時段／全日進價', cls:'mint'},
+  {label:'平均退貨率', value:pct(avg(returnRates)), sub:'退貨組數／銷售組數', cls:''},
+  {label:'最佳單場', value:fmt(bestSession.totalRevenue), sub:bestSession.date+' · '+bestSession.timeSlot, cls:'gold'},
+  {label:'最佳時段', value:bySlot[0][0], sub:'平均 '+fmt(bySlot[0][1])+' 元', cls:'mint'},
+  {label:'最佳金額帶', value:byPrice[0][0], sub:'平均 '+fmt(byPrice[0][1])+' 元', cls:'flash'},
+];
+document.getElementById('kpiBoard').innerHTML = kpis.map(k=>`
+  <div class="cell">
+    <div class="label">${k.label}</div>
+    <div class="value ${k.cls}">${k.value}</div>
+    <div class="sub">${k.sub}</div>
+  </div>`).join('');
+
+/* ---------------- Chart theme ---------------- */
+Chart.defaults.color = '#6a6f7a';
+Chart.defaults.font.family = "'JetBrains Mono', monospace";
+Chart.defaults.borderColor = '#e2e0da';
+const FLASH='#e14b26', MINT='#0e8f80', GOLD='#b8790a', BAD='#c93a63', TEXT='#1b1d22';
+
+function tip(){
+  return {
+    backgroundColor:'#1b1d22', titleColor:'#ffffff', bodyColor:'#dcdde0',
+    borderColor:'#1b1d22', borderWidth:1, padding:10,
+    titleFont:{family:"'Noto Sans TC',sans-serif",weight:'700'},
+    bodyFont:{family:"'JetBrains Mono',monospace"}
+  };
+}
+
+/* Trend chart */
+new Chart(document.getElementById('trendChart'), {
+  type:'line',
+  data:{
+    labels:data.map(d=>d.date.split('(')[0]),
+    datasets:[{
+      label:'全日進價',
+      data:data.map(d=>d.totalRevenue),
+      borderColor:FLASH, backgroundColor:'rgba(225,75,38,.10)',
+      pointBackgroundColor:data.map(d=> d===bestSession?GOLD : d===worstSession?BAD : FLASH),
+      pointRadius:data.map(d=> (d===bestSession||d===worstSession)?5:2.5),
+      tension:.25, fill:true, borderWidth:2
+    }]
+  },
+  options:{
+    plugins:{legend:{display:false}, tooltip:tip()},
+    scales:{
+      x:{ticks:{maxRotation:60,minRotation:60,autoSkip:true,maxTicksLimit:15}, grid:{display:false}},
+      y:{grid:{color:'#eeece7'}, ticks:{callback:v=>(v/1000)+'k'}}
+    }
+  }
+});
+
+/* Slot chart (bar + line) */
+new Chart(document.getElementById('slotChart'), {
+  data:{
+    labels:bySlot.map(s=>s[0]),
+    datasets:[
+      {type:'bar', label:'平均全日進價', data:bySlot.map(s=>s[1]), backgroundColor:'rgba(225,75,38,.75)', borderRadius:4, order:2, yAxisID:'y'},
+    ]
+  },
+  options:{
+    plugins:{legend:{display:false}, tooltip:tip()},
+    scales:{
+      x:{grid:{display:false}},
+      y:{grid:{color:'#eeece7'}, ticks:{callback:v=>(v/1000)+'k'}}
+    }
+  }
+});
+
+/* Duration chart */
+new Chart(document.getElementById('durationChart'), {
+  type:'bar',
+  data:{
+    labels:byDuration.sort((a,b)=>parseInt(a[0])-parseInt(b[0])).map(s=>s[0]),
+    datasets:[{
+      label:'平均全日進價',
+      data:byDuration.sort((a,b)=>parseInt(a[0])-parseInt(b[0])).map(s=>s[1]),
+      backgroundColor:'rgba(14,143,128,.70)', borderRadius:4
+    }]
+  },
+  options:{
+    plugins:{legend:{display:false}, tooltip:tip()},
+    scales:{x:{grid:{display:false}}, y:{grid:{color:'#eeece7'}, ticks:{callback:v=>(v/1000)+'k'}}}
+  }
+});
+
+/* Price chart: revenue vs return rate */
+const priceGroups = {};
+data.forEach(d=>{
+  const k = '$'+d.price;
+  priceGroups[k] = priceGroups[k] || {rev:[], ret:[]};
+  priceGroups[k].rev.push(d.totalRevenue);
+  priceGroups[k].ret.push(d.returns/d.unitsSold);
+});
+const priceLabels = Object.keys(priceGroups).sort();
+new Chart(document.getElementById('priceChart'), {
+  data:{
+    labels:priceLabels,
+    datasets:[
+      {type:'bar', label:'平均全日進價', data:priceLabels.map(k=>avg(priceGroups[k].rev)), backgroundColor:'rgba(184,121,10,.75)', borderRadius:4, yAxisID:'y'},
+      {type:'line', label:'平均退貨率', data:priceLabels.map(k=>avg(priceGroups[k].ret)*100), borderColor:BAD, backgroundColor:BAD, yAxisID:'y1', tension:.3}
+    ]
+  },
+  options:{
+    plugins:{legend:{labels:{font:{family:"'Noto Sans TC',sans-serif",size:11}}}, tooltip:tip()},
+    scales:{
+      x:{grid:{display:false}},
+      y:{position:'left', grid:{color:'#eeece7'}, ticks:{callback:v=>(v/1000)+'k'}},
+      y1:{position:'right', grid:{display:false}, ticks:{callback:v=>v+'%'}}
+    }
+  }
+});
+
+/* Gift chart */
+const giftGroups = {};
+data.forEach(d=>{
+  const k = giftBucket(d.gift);
+  (giftGroups[k]=giftGroups[k]||[]).push(d.totalRevenue);
+});
+new Chart(document.getElementById('giftChart'), {
+  type:'bar',
+  data:{
+    labels:Object.keys(giftGroups),
+    datasets:[{
+      label:'平均全日進價',
+      data:Object.keys(giftGroups).map(k=>avg(giftGroups[k])),
+      backgroundColor:['rgba(225,75,38,.75)','rgba(14,143,128,.75)','rgba(184,121,10,.75)'],
+      borderRadius:4
+    }]
+  },
+  options:{
+    plugins:{legend:{display:false}, tooltip:tip()},
+    scales:{x:{grid:{display:false}}, y:{grid:{color:'#eeece7'}, ticks:{callback:v=>(v/1000)+'k'}}}
+  }
+});
+
+/* ---------------- Table ---------------- */
+let sortKey='date', sortDir=1;
+function renderTable(){
+  const rows = [...data].sort((a,b)=>{
+    let av=a[sortKey], bv=b[sortKey];
+    if(sortKey==='date'){ av=new Date(a.date.split('(')[0]); bv=new Date(b.date.split('(')[0]); }
+    if(av<bv) return -1*sortDir;
+    if(av>bv) return 1*sortDir;
+    return 0;
+  });
+  document.getElementById('tableBody').innerHTML = rows.map(d=>{
+    const isBest = d===bestSession, isWorst = d===worstSession;
+    return `<tr>
+      <td>${d.date}</td>
+      <td>${d.timeSlot}</td>
+      <td>${d.hours}</td>
+      <td>${d.price}</td>
+      <td class="wrap-cell">${d.gift}</td>
+      <td>${fmt(d.flashRevenue)}</td>
+      <td>${pct(d.flashRatio)}</td>
+      <td>${fmt(d.nonFlashRevenue)}</td>
+      <td>${d.unitsSold}</td>
+      <td>${d.returns}</td>
+      <td>${fmt(d.totalRevenue)} ${isBest?'<span class="pill best">最佳</span>':''}${isWorst?'<span class="pill worst">最低</span>':''}</td>
+      <td class="wrap-cell">${d.note?('<span class="note-flag">● </span>'+d.note):''}</td>
+    </tr>`;
+  }).join('');
+}
+document.querySelectorAll('#dataTable thead th').forEach(th=>{
+  th.addEventListener('click', ()=>{
+    const key = th.dataset.key;
+    if(sortKey===key){ sortDir*=-1; } else { sortKey=key; sortDir=1; }
+    document.querySelectorAll('#dataTable thead th .arrow').forEach(a=>a.textContent='');
+    th.querySelector('.arrow').textContent = sortDir===1?'▲':'▼';
+    renderTable();
+  });
+});
+renderTable();
+</script>
+</body>
+</html>
